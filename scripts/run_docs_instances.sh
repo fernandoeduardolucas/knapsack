@@ -7,6 +7,22 @@ SEARCH_DIR="$DOCS_DIR"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_results.csv}"
 INSTANCE_FILTERS=()
 
+# Mapeamento manual para instâncias curtas (n_1000_1...n_1000_10) para os
+# nomes completos com metadados do gerador.
+declare -A INSTANCE_NAME_MAP=(
+  ["n_1000_1"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_100"
+  ["n_1000_2"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_300"
+  ["n_1000_3"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_100"
+  ["n_1000_4"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_200"
+  ["n_1000_5"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_300"
+  ["n_1000_6"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_100"
+  ["n_1000_7"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_200"
+  ["n_1000_8"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_300"
+  ["n_1000_9"]="n_1000_c_10000000000_g_10_f_0.1_eps_0_s_100"
+  ["n_1000_10"]="n_1000_c_10000000000_g_10_f_0.1_eps_0_s_200"
+)
+
+
 if [[ $# -ge 2 ]]; then
   INSTANCE_FILTERS=("${@:2}")
 fi
@@ -55,7 +71,12 @@ for file in "${instances[@]}"; do
   eps_param=""
   s_param=""
 
-  if [[ "$nome_base" =~ n_([^_]+)_c_([^_]+)_g_([^_]+)_f_([^_]+)_eps_([^_]+)_s_([^_]+)$ ]]; then
+  nome_parse="$nome_base"
+  if [[ -n "${INSTANCE_NAME_MAP[$nome_base]:-}" ]]; then
+    nome_parse="${INSTANCE_NAME_MAP[$nome_base]}"
+  fi
+
+  if [[ "$nome_parse" =~ n_([^_]+)_c_([^_]+)_g_([^_]+)_f_([^_]+)_eps_([^_]+)_s_([^_]+)$ ]]; then
     n_param="${BASH_REMATCH[1]}"
     c_param="${BASH_REMATCH[2]}"
     g_param="${BASH_REMATCH[3]}"
@@ -88,7 +109,15 @@ for file in "${instances[@]}"; do
 
   echo "============================================================"
   echo "Instância: $file"
-  output="$(java -cp target/classes org.ant.ACOKnapsack "$file")"
+
+  java_args=("$file")
+  # Quando o nome da instância inclui s (seed), repassa para o Java para
+  # tornar a execução reprodutível.
+  if [[ "$s_param" =~ ^[0-9]+$ ]]; then
+    java_args+=("--seed" "$s_param")
+  fi
+
+  output="$(java -cp target/classes org.ant.ACOKnapsack "${java_args[@]}")"
   echo "$output"
 
   capacidade="$(printf '%s\n' "$output" | awk -F': ' '/^Capacidade: / {print $2; exit}')"
