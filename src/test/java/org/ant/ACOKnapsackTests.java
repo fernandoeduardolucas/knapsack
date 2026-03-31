@@ -1,22 +1,27 @@
 package org.ant;
 
+import org.ant.knapsack.model.Instancia;
+import org.ant.knapsack.model.Item;
+import org.ant.knapsack.model.Solucao;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ACOKnapsackTests {
 
     @Test
     void deveEncontrarSolucaoValida() {
-        ACOKnapsack.Item[] itens = new ACOKnapsack.Item[]{
-                new ACOKnapsack.Item(2, 6),
-                new ACOKnapsack.Item(2, 10),
-                new ACOKnapsack.Item(3, 12),
-                new ACOKnapsack.Item(1, 7)
+        Item[] itens = new Item[]{
+                new Item(2, 6),
+                new Item(2, 10),
+                new Item(3, 12),
+                new Item(1, 7)
         };
 
         ACOKnapsack solver = new ACOKnapsack(
@@ -32,7 +37,7 @@ class ACOKnapsackTests {
                 12345L
         );
 
-        ACOKnapsack.Solucao melhor = solver.resolver();
+        Solucao melhor = solver.resolver();
 
         assertNotNull(melhor);
         assertTrue(melhor.pesoTotal <= 5);
@@ -50,7 +55,7 @@ class ACOKnapsackTests {
                 "5"
         ));
 
-        ACOKnapsack.Instancia instancia = ACOKnapsack.carregarInstancia(arquivo);
+        Instancia instancia = ACOKnapsack.carregarInstancia(arquivo);
 
         assertEquals(3, instancia.itens.length);
         assertEquals(5, instancia.capacidade);
@@ -68,7 +73,7 @@ class ACOKnapsackTests {
                 "10000000000"
         ));
 
-        ACOKnapsack.Instancia instancia = ACOKnapsack.carregarInstancia(arquivo);
+        Instancia instancia = ACOKnapsack.carregarInstancia(arquivo);
 
         assertEquals(2, instancia.itens.length);
         assertEquals(5001000076L, instancia.itens[0].valor);
