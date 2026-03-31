@@ -26,7 +26,9 @@ mkdir -p "$(dirname "$CSV_OUT")"
 printf 'instancia,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
 
 cd "$ROOT_DIR"
+echo "A compilar projeto..."
 ./mvnw -q -DskipTests compile
+echo "Compilação concluída."
 
 instances=()
 while IFS= read -r file; do
@@ -64,8 +66,10 @@ for file in "${instances[@]}"; do
 
   echo "============================================================"
   echo "Instância: $file"
-  output="$(java -cp target/classes org.ant.ACOKnapsack "$file")"
-  echo "$output"
+  output_file="$(mktemp)"
+  java -cp target/classes org.ant.ACOKnapsack "$file" | tee "$output_file"
+  output="$(cat "$output_file")"
+  rm -f "$output_file"
 
   capacidade="$(printf '%s\n' "$output" | awk -F': ' '/^Capacidade: / {print $2; exit}')"
   itens="$(printf '%s\n' "$output" | awk -F': ' '/^Itens: / {print $2; exit}')"
