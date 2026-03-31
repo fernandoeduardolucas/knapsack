@@ -109,7 +109,15 @@ for file in "${instances[@]}"; do
 
   echo "============================================================"
   echo "Instância: $file"
-  output="$(java -cp target/classes org.ant.ACOKnapsack "$file")"
+
+  java_args=("$file")
+  # Quando o nome da instância inclui s (seed), repassa para o Java para
+  # tornar a execução reprodutível.
+  if [[ "$s_param" =~ ^[0-9]+$ ]]; then
+    java_args+=("--seed" "$s_param")
+  fi
+
+  output="$(java -cp target/classes org.ant.ACOKnapsack "${java_args[@]}")"
   echo "$output"
 
   capacidade="$(printf '%s\n' "$output" | awk -F': ' '/^Capacidade: / {print $2; exit}')"
