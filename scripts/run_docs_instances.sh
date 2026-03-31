@@ -23,7 +23,14 @@ if [[ -d "$DOCS_DIR/Instancias" ]]; then
 fi
 
 mkdir -p "$(dirname "$CSV_OUT")"
-printf 'instancia,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
+# Legenda de colunas de metadados no nome da instância:
+# n = 1000 -> número de itens
+# c = 10000000000 -> capacidade da mochila
+# g = 10 -> parâmetro g do gerador
+# f = 0.1 -> parâmetro f do gerador
+# epsilon = 0.0001 -> parâmetro epsilon do gerador
+# s = 100 -> seed/semente usada na geração da instância
+printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
 
 cd "$ROOT_DIR"
 ./mvnw -q -DskipTests compile
@@ -40,6 +47,23 @@ fi
 
 for file in "${instances[@]}"; do
   nome="$(basename "$file")"
+  nome_base="${nome%.*}"
+  n_param=""
+  c_param=""
+  g_param=""
+  f_param=""
+  eps_param=""
+  s_param=""
+
+  if [[ "$nome_base" =~ n_([^_]+)_c_([^_]+)_g_([^_]+)_f_([^_]+)_eps_([^_]+)_s_([^_]+)$ ]]; then
+    n_param="${BASH_REMATCH[1]}"
+    c_param="${BASH_REMATCH[2]}"
+    g_param="${BASH_REMATCH[3]}"
+    f_param="${BASH_REMATCH[4]}"
+    eps_param="${BASH_REMATCH[5]}"
+    s_param="${BASH_REMATCH[6]}"
+  fi
+
   if [[ ${#INSTANCE_FILTERS[@]} -gt 0 ]]; then
     manter=0
     for filtro in "${INSTANCE_FILTERS[@]}"; do
@@ -73,8 +97,15 @@ for file in "${instances[@]}"; do
   peso_total="$(printf '%s\n' "$output" | awk -F': ' '/^Peso total: / {print $2; exit}')"
   itens_escolhidos="$(printf '%s\n' "$output" | sed -n 's/^Itens escolhidos (índices): //p' | head -n 1 | xargs)"
 
-  printf '%s,%s,%s,%s,%s,"%s"\n' \
+  # Ordem do printf segue a legenda do cabeçalho CSV acima.
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s"\n' \
     "$nome" \
+    "${n_param:-}" \
+    "${c_param:-}" \
+    "${g_param:-}" \
+    "${f_param:-}" \
+    "${eps_param:-}" \
+    "${s_param:-}" \
     "${capacidade:-}" \
     "${itens:-}" \
     "${melhor_valor:-}" \
