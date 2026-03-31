@@ -15,10 +15,10 @@ import java.util.Random;
 public class ACOKnapsack {
 
     public static class Item {
-        public final int peso;
-        public final int valor;
+        public final long peso;
+        public final long valor;
 
-        public Item(int peso, int valor) {
+        public Item(long peso, long valor) {
             if (peso <= 0) throw new IllegalArgumentException("Peso deve ser > 0");
             if (valor < 0) throw new IllegalArgumentException("Valor não pode ser negativo");
             this.peso = peso;
@@ -28,10 +28,10 @@ public class ACOKnapsack {
 
     public static class Solucao {
         public final boolean[] escolhidos;
-        public final int valorTotal;
-        public final int pesoTotal;
+        public final long valorTotal;
+        public final long pesoTotal;
 
-        public Solucao(boolean[] escolhidos, int valorTotal, int pesoTotal) {
+        public Solucao(boolean[] escolhidos, long valorTotal, long pesoTotal) {
             this.escolhidos = escolhidos;
             this.valorTotal = valorTotal;
             this.pesoTotal = pesoTotal;
@@ -40,16 +40,16 @@ public class ACOKnapsack {
 
     public static class Instancia {
         public final Item[] itens;
-        public final int capacidade;
+        public final long capacidade;
 
-        public Instancia(Item[] itens, int capacidade) {
+        public Instancia(Item[] itens, long capacidade) {
             this.itens = itens;
             this.capacidade = capacidade;
         }
     }
 
     private final Item[] itens;
-    private final int capacidade;
+    private final long capacidade;
 
     private final int numFormigas;
     private final int iteracoes;
@@ -65,7 +65,7 @@ public class ACOKnapsack {
 
     public ACOKnapsack(
             Item[] itens,
-            int capacidade,
+            long capacidade,
             int numFormigas,
             int iteracoes,
             double alpha,
@@ -91,7 +91,7 @@ public class ACOKnapsack {
         inicializarEstruturas();
     }
 
-    public ACOKnapsack(Item[] itens, int capacidade) {
+    public ACOKnapsack(Item[] itens, long capacidade) {
         this(itens, capacidade, 30, 300, 1.0, 3.0, 0.2, 1.0, 80, System.nanoTime());
     }
 
@@ -159,8 +159,8 @@ public class ACOKnapsack {
         Arrays.sort(idx, (a, b) -> Double.compare((double) itens[b].valor / itens[b].peso, (double) itens[a].valor / itens[a].peso));
 
         boolean[] esc = new boolean[itens.length];
-        int peso = 0;
-        int valor = 0;
+        long peso = 0;
+        long valor = 0;
         for (int i : idx) {
             if (peso + itens[i].peso <= capacidade) {
                 esc[i] = true;
@@ -175,8 +175,8 @@ public class ACOKnapsack {
     private Solucao construirSolucao() {
         int n = itens.length;
         boolean[] escolhidos = new boolean[n];
-        int peso = 0;
-        int valor = 0;
+        long peso = 0;
+        long valor = 0;
 
         List<Integer> naoVisitados = new ArrayList<>(n);
         for (int i = 0; i < n; i++) naoVisitados.add(i);
@@ -225,16 +225,16 @@ public class ACOKnapsack {
 
     private Solucao buscaLocal1Flip(Solucao base) {
         boolean[] esc = Arrays.copyOf(base.escolhidos, base.escolhidos.length);
-        int melhorValor = base.valorTotal;
-        int melhorPeso = base.pesoTotal;
+        long melhorValor = base.valorTotal;
+        long melhorPeso = base.pesoTotal;
         boolean melhorou;
 
         do {
             melhorou = false;
             for (int i = 0; i < esc.length; i++) {
                 boolean novoEstado = !esc[i];
-                int novoPeso = melhorPeso + (novoEstado ? itens[i].peso : -itens[i].peso);
-                int novoValor = melhorValor + (novoEstado ? itens[i].valor : -itens[i].valor);
+                long novoPeso = melhorPeso + (novoEstado ? itens[i].peso : -itens[i].peso);
+                long novoValor = melhorValor + (novoEstado ? itens[i].valor : -itens[i].valor);
                 if (novoEstado && novoPeso > capacidade) {
                     continue;
                 }
@@ -304,15 +304,15 @@ public class ACOKnapsack {
                 String[] partes = linha.trim().split("\\s+");
                 if (partes.length < 3) throw new IllegalArgumentException("Linha de item inválida: " + linha);
 
-                int lucro = Integer.parseInt(partes[1]);
-                int peso = Integer.parseInt(partes[2]);
+                long lucro = Long.parseLong(partes[1]);
+                long peso = Long.parseLong(partes[2]);
                 itens[i] = new Item(peso, lucro);
             }
 
             String capacidadeLinha = br.readLine();
             if (capacidadeLinha == null) throw new IllegalArgumentException("Linha de capacidade ausente em " + path);
 
-            int capacidade = Integer.parseInt(capacidadeLinha.trim());
+            long capacidade = Long.parseLong(capacidadeLinha.trim());
             return new Instancia(itens, capacidade);
         }
     }

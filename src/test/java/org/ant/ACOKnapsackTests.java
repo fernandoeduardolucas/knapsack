@@ -57,4 +57,22 @@ class ACOKnapsackTests {
         assertEquals(10, instancia.itens[0].valor);
         assertEquals(5, instancia.itens[0].peso);
     }
+
+    @Test
+    void deveCarregarInstanciaComValoresLongos() throws IOException {
+        Path arquivo = Files.createTempFile("instancia-grande", ".txt");
+        Files.writeString(arquivo, String.join("\n",
+                "2",
+                "1 5001000076 9000000000",
+                "2 12 5",
+                "10000000000"
+        ));
+
+        ACOKnapsack.Instancia instancia = ACOKnapsack.carregarInstancia(arquivo);
+
+        assertEquals(2, instancia.itens.length);
+        assertEquals(5001000076L, instancia.itens[0].valor);
+        assertEquals(9000000000L, instancia.itens[0].peso);
+        assertEquals(10000000000L, instancia.capacidade);
+    }
 }
