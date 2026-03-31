@@ -108,7 +108,129 @@ As `r` melhores formigas reforçam, com peso proporcional ao rank. Compromisso e
 
 O desempenho do ACO melhora substancialmente quando cada solução construída é submetida a uma pesquisa local simples (por exemplo, **1-flip**) antes da atualização de feromonas. Esta integração transforma o ACO num algoritmo memético distribuído.
 
-## 5. Parâmetros Críticos e Ajuste
+## 5. Ligação direta com o código deste projeto
+
+Esta secção liga a teoria à implementação real em Java e ao guião de execução em lote.
+
+### 5.1 Excertos do núcleo ACO (MMAS)
+
+No ficheiro `src/main/java/org/ant/knapsack/algo/AcoCore.java`, o ciclo principal segue exatamente o fluxo MMAS:
+
+```java
+for (int t = 0; t < iteracoes; t++) {
+    Solucao melhorIteracao = null;
+
+    for (int formiga = 0; formiga < numFormigas; formiga++) {
+        Solucao candidata = construirSolucaoProbabilistica();
+        Solucao refinada = melhorarComBuscaLocal1Flip(candidata);
+        if (melhorIteracao == null || refinada.valorTotal > melhorIteracao.valorTotal) {
+            melhorIteracao = refinada;
+        }
+    }
+
+    evaporarFeromonio();
+    depositarFeromonio(melhorGlobal);
+    limitarFeromonio();
+}
+```
+
+**Leitura prática do excerto acima:**
+- Cada formiga constrói uma solução probabilística viável.
+- Em seguida aplica-se uma melhoria local 1-flip.
+- Após avaliar a melhor solução, as feromonas são atualizadas com evaporação, reforço e truncamento.
+
+Outro excerto importante é a **seleção probabilística** de itens:
+
+```java
+double atratividade = Math.pow(tau[indice], alpha) * Math.pow(eta[indice], beta);
+atratividade = Math.max(atratividade, 1e-12);
+probabilidades[i] = atratividade;
+```
+
+Aqui, `tau` representa memória coletiva (feromonas) e `eta` representa heurística (`valor/peso`), materializando a equação da secção 2.2.
+
+### 5.2 Excerto da CLI de execução
+
+No ficheiro `src/main/java/org/ant/ACOKnapsack.java`, o `main` permite correr instâncias individuais:
+
+```bash
+java -cp target/classes org.ant.ACOKnapsack <ficheiro-instancia> \
+  [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]
+```
+
+Exemplo:
+
+```bash
+java -cp target/classes org.ant.ACOKnapsack docs/inst_test/instancias/n_1000_1 --seed 100
+```
+
+Isto é útil para depuração e análise de uma instância específica.
+
+### 5.3 Excerto do guião de benchmark
+
+No ficheiro `scripts/run_docs_instances.sh`, o guião automatiza o processamento em lote:
+
+```bash
+./mvnw -q -DskipTests compile
+...
+output="$(java -cp target/classes org.ant.ACOKnapsack "${java_args[@]}")"
+...
+printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s","%s"\n' ... >> "$CSV_OUT"
+```
+
+**Resumo do papel do guião:**
+- Compila o projeto.
+- Percorre as instâncias em `docs/inst_test/instancias`.
+- Executa o ACO para cada ficheiro de instância.
+- Extrai métricas (valor, peso, itens escolhidos).
+- Gera um CSV consolidado para comparação experimental.
+
+## 6. Como as instâncias de teste são usadas e para que servem
+
+As instâncias em `docs/inst_test/instancias` representam problemas de mochila 0/1 com parâmetros controlados.
+
+### 6.1 Como são lidas pelo sistema
+
+O loader `InstanciaLoader` lê cada ficheiro com o formato:
+1. Primeira linha: número de itens `n`
+2. Próximas `n` linhas: item com lucro e peso
+3. Última linha: capacidade da mochila
+
+Assim, o ACO recebe uma estrutura uniforme (`Instancia`) para todas as execuções.
+
+### 6.2 Como entram no fluxo experimental
+
+No guião, cada instância:
+1. É identificada por nome (ex.: `n_1000_6`)
+2. Pode ser mapeada para metadados (`n`, `c`, `g`, `f`, `eps`, `s`)
+3. É executada no `ACOKnapsack`
+4. Gera uma linha de resultado no CSV final
+
+Isto permite repetir experiências e comparar desempenho entre várias configurações de instância.
+
+### 6.3 Como validar os resultados com valores ótimos
+
+Para avaliar a qualidade do ACO, o resultado de cada execução pode ser comparado com valores de referência (ótimos) disponibilizados em `docs/inst_test/Optimal.pdf`.
+
+Fluxo recomendado:
+1. Executar `scripts/run_docs_instances.sh` para gerar o CSV de resultados do ACO.
+2. Para cada instância (ex.: `n_1000_1`), extrair o `melhor_valor` do CSV.
+3. Consultar o valor ótimo da mesma instância no ficheiro de referência.
+4. Calcular o desvio relativo:
+   `gap(%) = 100 * (valor_otimo - melhor_valor_aco) / valor_otimo`
+
+Assim obténs uma métrica objetiva de qualidade por instância e uma visão agregada do desempenho do algoritmo.
+
+### 6.4 Para que são usadas (objetivo)
+
+As instâncias de teste são usadas para:
+- **Avaliação de qualidade**: verificar o valor total que o ACO consegue atingir.
+- **Avaliação de robustez**: observar estabilidade entre diferentes sementes e cenários.
+- **Comparação entre parâmetros**: medir impacto de `alpha`, `beta`, `rho`, número de formigas e iterações.
+- **Reprodutibilidade**: usar `seed` fixa no nome/metadados para repetir resultados.
+- **Relatórios experimentais**: produzir CSV para análise estatística e gráficos.
+
+## 7. Parâmetros Críticos e Ajuste
 
 ### Parâmetros e Valores Típicos
 
@@ -121,9 +243,9 @@ O desempenho do ACO melhora substancialmente quando cada solução construída �
 | `τ_min / τ_max` | `τ_max = 1/(ρ·z*)`; `τ_min = τ_max/(2n)` |
 | Critério paragem | 500 a 2000 ciclos; reinicialização após 100 ciclos sem melhoria |
 
-## 6. Vantagens e Limitações
+## 8. Vantagens e Limitações
 
-### 6.1 Pontos Fortes
+### 8.1 Pontos Fortes
 
 - Construção incremental — naturalmente gera soluções feasíveis para o KP
 - Paralelismo real — `m` formigas trabalham independentemente
@@ -131,7 +253,7 @@ O desempenho do ACO melhora substancialmente quando cada solução construída �
 - Integração natural da heurística `η = pᵢ/wᵢ` — combina aprendizagem com conhecimento do domínio
 - Escalável — eficaz para instâncias de grande dimensão
 
-### 6.2 Limitações
+### 8.2 Limitações
 
 - Convergência lenta no início — feromonas inicialmente uniformes dão pouca orientação
 - Estagnação — se uma solução dominar cedo, as feromonas convergem e a diversidade colapsa
