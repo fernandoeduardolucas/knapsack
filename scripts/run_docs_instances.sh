@@ -6,6 +6,28 @@ DOCS_DIR="${1:-$ROOT_DIR/docs}"
 SEARCH_DIR="$DOCS_DIR"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_results.csv}"
 INSTANCE_FILTERS=()
+TOTAL_INSTANCES=0
+PROCESSED_INSTANCES=0
+
+show_help() {
+  cat <<EOF
+Uso:
+  $(basename "$0") [PASTA_DOCS] [INSTANCIA_1 INSTANCIA_2 ...]
+
+Exemplos:
+  $(basename "$0")
+  $(basename "$0") "$ROOT_DIR/docs/inst_test"
+  $(basename "$0") "$ROOT_DIR/docs/inst_test" n_1000_1 n_1000_2
+
+Variáveis de ambiente:
+  CSV_OUT  Caminho para o CSV de saída (padrão: $ROOT_DIR/results/docs_instances_results.csv)
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  show_help
+  exit 0
+fi
 
 if [[ $# -ge 2 ]]; then
   INSTANCE_FILTERS=("${@:2}")
@@ -32,6 +54,8 @@ instances=()
 while IFS= read -r file; do
   instances+=("$file")
 done < <(find "$SEARCH_DIR" -type f | sort)
+
+TOTAL_INSTANCES="${#instances[@]}"
 
 if [[ ${#instances[@]} -eq 0 ]]; then
   echo "Nenhuma instância encontrada em $SEARCH_DIR (esperado test.in ou *.txt/*.dat/*.inst/*.kp)"
@@ -80,8 +104,10 @@ for file in "${instances[@]}"; do
     "${melhor_valor:-}" \
     "${peso_total:-}" \
     "${itens_escolhidos:-}" >> "$CSV_OUT"
+  ((PROCESSED_INSTANCES+=1))
   echo
 
 done
 
 echo "CSV gerado em: $CSV_OUT"
+echo "Arquivos encontrados: $TOTAL_INSTANCES | Instâncias processadas: $PROCESSED_INSTANCES"
