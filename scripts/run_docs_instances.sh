@@ -7,20 +7,22 @@ SEARCH_DIR="$DOCS_DIR"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_results.csv}"
 INSTANCE_FILTERS=()
 
-# Mapeamento manual para instâncias curtas (n_1000_1...n_1000_10) para os
-# nomes completos com metadados do gerador.
-declare -A INSTANCE_NAME_MAP=(
-  ["n_1000_1"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_100"
-  ["n_1000_2"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_300"
-  ["n_1000_3"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_100"
-  ["n_1000_4"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_200"
-  ["n_1000_5"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_300"
-  ["n_1000_6"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_100"
-  ["n_1000_7"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_200"
-  ["n_1000_8"]="n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_300"
-  ["n_1000_9"]="n_1000_c_10000000000_g_10_f_0.1_eps_0_s_100"
-  ["n_1000_10"]="n_1000_c_10000000000_g_10_f_0.1_eps_0_s_200"
-)
+map_instance_name() {
+  # Compatível com Bash 3.x (macOS), evitando arrays associativos.
+  case "$1" in
+    n_1000_1) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_100" ;;
+    n_1000_2) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_300" ;;
+    n_1000_3) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_100" ;;
+    n_1000_4) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_200" ;;
+    n_1000_5) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_300" ;;
+    n_1000_6) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_100" ;;
+    n_1000_7) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_200" ;;
+    n_1000_8) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_300" ;;
+    n_1000_9) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0_s_100" ;;
+    n_1000_10) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0_s_200" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
 
 
 if [[ $# -ge 2 ]]; then
@@ -71,10 +73,7 @@ for file in "${instances[@]}"; do
   eps_param=""
   s_param=""
 
-  nome_parse="$nome_base"
-  if [[ -n "${INSTANCE_NAME_MAP[$nome_base]:-}" ]]; then
-    nome_parse="${INSTANCE_NAME_MAP[$nome_base]}"
-  fi
+  nome_parse="$(map_instance_name "$nome_base")"
 
   if [[ "$nome_parse" =~ n_([^_]+)_c_([^_]+)_g_([^_]+)_f_([^_]+)_eps_([^_]+)_s_([^_]+)$ ]]; then
     n_param="${BASH_REMATCH[1]}"
@@ -88,7 +87,8 @@ for file in "${instances[@]}"; do
   if [[ ${#INSTANCE_FILTERS[@]} -gt 0 ]]; then
     manter=0
     for filtro in "${INSTANCE_FILTERS[@]}"; do
-      if [[ "$nome" == "$filtro" ]]; then
+      filtro_base="${filtro%.*}"
+      if [[ "$nome" == "$filtro" || "$nome_base" == "$filtro" || "$nome_base" == "$filtro_base" ]]; then
         manter=1
         break
       fi
