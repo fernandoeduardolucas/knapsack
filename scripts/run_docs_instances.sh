@@ -48,7 +48,7 @@ mkdir -p "$(dirname "$CSV_OUT")"
 # f = 0.1 -> parâmetro f do gerador
 # epsilon = 0.0001 -> parâmetro epsilon do gerador
 # s = 100 -> seed/semente usada na geração da instância
-printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
+printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,itens_escolhidos_detalhados\n' > "$CSV_OUT"
 
 cd "$ROOT_DIR"
 ./mvnw -q -DskipTests compile
@@ -125,9 +125,10 @@ for file in "${instances[@]}"; do
   melhor_valor="$(printf '%s\n' "$output" | awk -F': ' '/^Melhor valor: / {print $2; exit}')"
   peso_total="$(printf '%s\n' "$output" | awk -F': ' '/^Peso total: / {print $2; exit}')"
   itens_escolhidos="$(printf '%s\n' "$output" | sed -n 's/^Itens escolhidos (índices): //p' | head -n 1 | xargs)"
+  itens_escolhidos_detalhados="$(printf '%s\n' "$output" | sed -n 's/^Itens escolhidos detalhados (indice:valor:peso): //p' | head -n 1 | xargs)"
 
   # Ordem do printf segue a legenda do cabeçalho CSV acima.
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s"\n' \
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s","%s"\n' \
     "$nome" \
     "${n_param:-}" \
     "${c_param:-}" \
@@ -139,7 +140,8 @@ for file in "${instances[@]}"; do
     "${itens:-}" \
     "${melhor_valor:-}" \
     "${peso_total:-}" \
-    "${itens_escolhidos:-}" >> "$CSV_OUT"
+    "${itens_escolhidos:-}" \
+    "${itens_escolhidos_detalhados:-}" >> "$CSV_OUT"
   echo
 
 done
