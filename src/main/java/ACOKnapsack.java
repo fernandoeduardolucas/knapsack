@@ -1,14 +1,29 @@
-import java.util.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
 
 /**
  * ACO para o Problema da Mochila 0/1.
- * - Constrói soluções viáveis (não excede a capacidade).
- * - Probabilidades guiadas por feromonas (tau) e heurística (valor/peso).
- * - Evaporação + depósito por iteração + reforço elitista da melhor solução global.
+ *
+ * Uso CLI:
+ *   java ACOKnapsack <arquivo-instancia>
+ *      [--ants N] [--iters N]
+ *      [--alpha A] [--beta B]
+ *      [--rho R] [--q Q] [--elite E]
+ *      [--seed S]
+ *
+ * Formato da instância (dataset do repositório):
+ * - 1ª linha: n
+ * - próximas n linhas: id lucro peso
+ * - última linha: capacidade c
  */
 public class ACOKnapsack {
 
-    /** Item da mochila */
     public static class Item {
         public final int peso;
         public final int valor;
@@ -21,7 +36,6 @@ public class ACOKnapsack {
         }
     }
 
-    /** Solução construída por uma formiga */
     public static class Solucao {
         public final boolean[] escolhidos;
         public final int valorTotal;
@@ -34,27 +48,31 @@ public class ACOKnapsack {
         }
     }
 
+    public static class Instancia {
+        public final Item[] itens;
+        public final int capacidade;
+
+        public Instancia(Item[] itens, int capacidade) {
+            this.itens = itens;
+            this.capacidade = capacidade;
+        }
+    }
+
     private final Item[] itens;
     private final int capacidade;
 
-    // Parâmetros ACO
     private final int numFormigas;
     private final int iteracoes;
-    private final double alpha;      // peso da feromona
-    private final double beta;       // peso da heurística
-    private final double rho;        // taxa de evaporação (0..1)
-    private final double Q;          // intensidade de depósito
-    private final double fatorElite; // reforço da melhor global
+    private final double alpha;
+    private final double beta;
+    private final double rho;
+    private final double q;
+    private final double fatorElite;
 
     private final Random rng;
+    private double[] tau;
+    private double[] eta;
 
-    // Feromonas e heurísticas
-    private double[] tau;  // feromona por item
-    private double[] eta;  // heurística valor/peso normalizada
-
-    /**
-     * Construtor com parâmetros detalhados.
-     */
     public ACOKnapsack(Item[] itens,
                        int capacidade,
                        int numFormigas,
@@ -62,7 +80,7 @@ public class ACOKnapsack {
                        double alpha,
                        double beta,
                        double rho,
-                       double Q,
+                       double q,
                        double fatorElite,
                        long seed) {
         if (capacidade <= 0) throw new IllegalArgumentException("Capacidade deve ser > 0");
@@ -74,38 +92,22 @@ public class ACOKnapsack {
         this.alpha = alpha;
         this.beta = beta;
         this.rho = rho;
-        this.Q = Q;
+        this.q = q;
         this.fatorElite = fatorElite;
         this.rng = new Random(seed);
-
         inicializarEstruturas();
     }
 
-    /**
-     * Construtor com parâmetros sugeridos (bons valores de partida).
-     */
     public ACOKnapsack(Item[] itens, int capacidade) {
-        this(itens,
-                capacidade,
-                30,     // numFormigas
-                200,    // iteracoes
-                1.0,    // alpha
-                3.0,    // beta
-                0.30,   // rho
-                0.01,   // Q
-                2.0,    // fatorElite
-                System.nanoTime()); // seed
+        this(itens, capacidade, 30, 200, 1.0, 3.0, 0.30, 0.01, 2.0, System.nanoTime());
     }
 
     private void inicializarEstruturas() {
         int n = itens.length;
         tau = new double[n];
         eta = new double[n];
-
-        // feromona inicial
         Arrays.fill(tau, 1.0);
 
-        // heurística: valor/peso normalizado para evitar bias extremo
         double maxRatio = 0.0;
         for (Item it : itens) {
             maxRatio = Math.max(maxRatio, (double) it.valor / it.peso);
@@ -114,20 +116,16 @@ public class ACOKnapsack {
 
         for (int i = 0; i < n; i++) {
             double ratio = (double) itens[i].valor / itens[i].peso;
-            eta[i] = ratio / maxRatio; // fica em (0, 1]
+            eta[i] = ratio / maxRatio;
         }
     }
 
-    /**
-     * Executa o ACO e devolve a melhor solução encontrada.
-     */
     public Solucao resolver() {
         Solucao melhorGlobal = null;
 
         for (int t = 0; t < iteracoes; t++) {
             List<Solucao> solucoes = new ArrayList<>(numFormigas);
 
-            // 1) Cada formiga constrói uma solução viável
             for (int k = 0; k < numFormigas; k++) {
                 Solucao s = construirSolucao();
                 solucoes.add(s);
@@ -136,20 +134,16 @@ public class ACOKnapsack {
                 }
             }
 
-            // 2) Atualização de feromonas
             evaporarFeromonas();
 
-            // Depósito por iteração (todas as formigas)
             for (Solucao s : solucoes) {
                 depositarFeromonas(s, 1.0);
             }
 
-            // Reforço elitista (melhor global até agora)
             if (melhorGlobal != null) {
                 depositarFeromonas(melhorGlobal, fatorElite);
             }
 
-            // (Opcional) Limitar feromonas para evitar explosão numérica
             limitarFeromonas(1e-6, 1e6);
         }
 
@@ -162,12 +156,10 @@ public class ACOKnapsack {
         int peso = 0;
         int valor = 0;
 
-        // Conjunto de itens ainda elegíveis (não escolhidos e que cabem)
         boolean progresso;
         do {
             progresso = false;
 
-            // Preparar lista de candidatos viáveis
             List<Integer> candidatos = new ArrayList<>();
             for (int i = 0; i < n; i++) {
                 if (!escolhidos[i] && (peso + itens[i].peso) <= capacidade) {
@@ -177,13 +169,11 @@ public class ACOKnapsack {
 
             if (candidatos.isEmpty()) break;
 
-            // Calcular atratividades
             double[] atr = new double[candidatos.size()];
             double soma = 0.0;
             for (int idx = 0; idx < candidatos.size(); idx++) {
                 int i = candidatos.get(idx);
                 double a = Math.pow(tau[i], alpha) * Math.pow(eta[i], beta);
-                // Proteção contra zero absoluto
                 if (a < 1e-12) a = 1e-12;
                 atr[idx] = a;
                 soma += a;
@@ -191,7 +181,6 @@ public class ACOKnapsack {
 
             if (soma <= 0.0) break;
 
-            // Seleção por roleta
             double r = rng.nextDouble() * soma;
             int escolhidoIdx = -1;
             double acum = 0.0;
@@ -203,11 +192,9 @@ public class ACOKnapsack {
                 }
             }
             if (escolhidoIdx == -1) {
-                // fallback (raro): escolher o último candidato
                 escolhidoIdx = candidatos.get(candidatos.size() - 1);
             }
 
-            // Incluir item escolhido (sempre cabe pela filtragem)
             escolhidos[escolhidoIdx] = true;
             peso += itens[escolhidoIdx].peso;
             valor += itens[escolhidoIdx].valor;
@@ -226,8 +213,7 @@ public class ACOKnapsack {
     }
 
     private void depositarFeromonas(Solucao s, double multiplicador) {
-        // Depósito proporcional ao valor da solução
-        double deposito = Q * s.valorTotal * multiplicador;
+        double deposito = q * s.valorTotal * multiplicador;
         if (deposito <= 0) return;
         for (int i = 0; i < s.escolhidos.length; i++) {
             if (s.escolhidos[i]) {
@@ -243,45 +229,99 @@ public class ACOKnapsack {
         }
     }
 
-    // ------------------- Exemplo de uso -------------------
+    public static Instancia carregarInstancia(Path path) throws IOException {
+        try (BufferedReader br = Files.newBufferedReader(path)) {
+            String primeira = br.readLine();
+            if (primeira == null) {
+                throw new IllegalArgumentException("Instância vazia: " + path);
+            }
 
-    public static void main(String[] args) {
-        // Exemplo de itens (peso, valor)
-        Item[] itens = new Item[]{
-                new Item(12, 24),
-                new Item(7, 13),
-                new Item(11, 23),
-                new Item(8, 15),
-                new Item(9, 16),
-                new Item(6, 12),
-                new Item(5, 9),
-                new Item(14, 28),
-                new Item(3, 6),
-                new Item(2, 4)
-        };
+            int n = Integer.parseInt(primeira.trim());
+            if (n <= 0) {
+                throw new IllegalArgumentException("Número de itens inválido em " + path + ": " + n);
+            }
 
-        int capacidade = 35;
+            Item[] itens = new Item[n];
+            for (int i = 0; i < n; i++) {
+                String linha = br.readLine();
+                if (linha == null) {
+                    throw new IllegalArgumentException("Faltam linhas de itens em " + path + " (esperado: " + n + ")");
+                }
+
+                String[] partes = linha.trim().split("\\s+");
+                if (partes.length < 3) {
+                    throw new IllegalArgumentException("Linha de item inválida em " + path + ": \"" + linha + "\"");
+                }
+
+                int lucro = Integer.parseInt(partes[1]);
+                int peso = Integer.parseInt(partes[2]);
+                itens[i] = new Item(peso, lucro);
+            }
+
+            String capacidadeLinha = br.readLine();
+            if (capacidadeLinha == null) {
+                throw new IllegalArgumentException("Linha de capacidade ausente em " + path);
+            }
+            int capacidade = Integer.parseInt(capacidadeLinha.trim());
+            return new Instancia(itens, capacidade);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            System.err.println("Uso: java ACOKnapsack <arquivo-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--elite E] [--seed S]");
+            System.exit(1);
+        }
+
+        Path instanciaPath = Path.of(args[0]);
+        int ants = 30;
+        int iters = 200;
+        double alpha = 1.0;
+        double beta = 3.0;
+        double rho = 0.30;
+        double q = 0.01;
+        double elite = 2.0;
+        long seed = System.nanoTime();
+
+        for (int i = 1; i < args.length; i++) {
+            String arg = args[i];
+            switch (arg) {
+                case "--ants" -> ants = Integer.parseInt(args[++i]);
+                case "--iters" -> iters = Integer.parseInt(args[++i]);
+                case "--alpha" -> alpha = Double.parseDouble(args[++i]);
+                case "--beta" -> beta = Double.parseDouble(args[++i]);
+                case "--rho" -> rho = Double.parseDouble(args[++i]);
+                case "--q" -> q = Double.parseDouble(args[++i]);
+                case "--elite" -> elite = Double.parseDouble(args[++i]);
+                case "--seed" -> seed = Long.parseLong(args[++i]);
+                default -> throw new IllegalArgumentException("Parâmetro desconhecido: " + arg);
+            }
+        }
+
+        Instancia instancia = carregarInstancia(instanciaPath);
 
         ACOKnapsack aco = new ACOKnapsack(
-                itens,
-                capacidade,
-                30,     // numFormigas
-                200,    // iteracoes
-                1.0,    // alpha (peso feromona)
-                3.0,    // beta  (peso heurística)
-                0.30,   // rho   (evaporação)
-                0.01,   // Q     (intensidade de depósito)
-                2.0,    // fatorElite (reforço melhor global)
-                12345L  // seed reprodutível
+                instancia.itens,
+                instancia.capacidade,
+                ants,
+                iters,
+                alpha,
+                beta,
+                rho,
+                q,
+                elite,
+                seed
         );
 
         Solucao melhor = aco.resolver();
 
-        System.out.println("=== Melhor solução encontrada (ACO) ===");
-        System.out.println("Valor total: " + melhor.valorTotal);
+        System.out.println("Arquivo: " + instanciaPath);
+        System.out.println("Capacidade: " + instancia.capacidade);
+        System.out.println("Itens: " + instancia.itens.length);
+        System.out.println("Melhor valor: " + melhor.valorTotal);
         System.out.println("Peso total: " + melhor.pesoTotal);
         System.out.print("Itens escolhidos (índices): ");
-        for (int i = 0; i < itens.length; i++) {
+        for (int i = 0; i < instancia.itens.length; i++) {
             if (melhor.escolhidos[i]) System.out.print(i + " ");
         }
         System.out.println();
