@@ -12,9 +12,15 @@ fi
 cd "$ROOT_DIR"
 ./mvnw -q -DskipTests compile
 
-mapfile -t instances < <(find "$DOCS_DIR" -type f \( -name "*.txt" -o -name "*.dat" -o -name "*.inst" -o -name "*.kp" \) | sort)
+instances=()
+while IFS= read -r file; do
+  instances+=("$file")
+done < <(find "$DOCS_DIR" -type f \( -name "*.txt" -o -name "*.dat" -o -name "*.inst" -o -name "*.kp" \) | sort)
+
 if [[ ${#instances[@]} -eq 0 ]]; then
-  mapfile -t instances < <(find "$DOCS_DIR" -type f -name "test.in" | sort)
+  while IFS= read -r file; do
+    instances+=("$file")
+  done < <(find "$DOCS_DIR" -type f -name "test.in" | sort)
 fi
 
 if [[ ${#instances[@]} -eq 0 ]]; then
@@ -25,7 +31,7 @@ fi
 for file in "${instances[@]}"; do
   echo "============================================================"
   echo "Instância: $file"
-  java -cp target/classes ACOKnapsack "$file"
+  java -cp target/classes org.ant.ACOKnapsack "$file"
   echo
 
 done

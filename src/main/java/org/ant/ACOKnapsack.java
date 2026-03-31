@@ -1,3 +1,5 @@
+package org.ant;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -8,19 +10,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * ACO para o Problema da Mochila 0/1.
- *
- * Uso CLI:
- *   java ACOKnapsack <arquivo-instancia>
- *      [--ants N] [--iters N]
- *      [--alpha A] [--beta B]
- *      [--rho R] [--q Q] [--elite E]
- *      [--seed S]
- *
- * Formato da instância (dataset do repositório):
- * - 1ª linha: n
- * - próximas n linhas: id lucro peso
- * - última linha: capacidade c
+ * ACO (MMAS simplificado) para o Problema da Mochila 0/1.
  */
 public class ACOKnapsack {
 
@@ -67,24 +57,27 @@ public class ACOKnapsack {
     private final double beta;
     private final double rho;
     private final double q;
-    private final double fatorElite;
+    private final int limiteSemMelhoria;
 
     private final Random rng;
     private double[] tau;
     private double[] eta;
 
-    public ACOKnapsack(Item[] itens,
-                       int capacidade,
-                       int numFormigas,
-                       int iteracoes,
-                       double alpha,
-                       double beta,
-                       double rho,
-                       double q,
-                       double fatorElite,
-                       long seed) {
+    public ACOKnapsack(
+            Item[] itens,
+            int capacidade,
+            int numFormigas,
+            int iteracoes,
+            double alpha,
+            double beta,
+            double rho,
+            double q,
+            int limiteSemMelhoria,
+            long seed
+    ) {
         if (capacidade <= 0) throw new IllegalArgumentException("Capacidade deve ser > 0");
         if (itens == null || itens.length == 0) throw new IllegalArgumentException("Lista de itens vazia");
+        if (numFormigas <= 0 || iteracoes <= 0) throw new IllegalArgumentException("Parâmetros de execução inválidos");
         this.itens = itens;
         this.capacidade = capacidade;
         this.numFormigas = numFormigas;
@@ -93,20 +86,19 @@ public class ACOKnapsack {
         this.beta = beta;
         this.rho = rho;
         this.q = q;
-        this.fatorElite = fatorElite;
+        this.limiteSemMelhoria = limiteSemMelhoria;
         this.rng = new Random(seed);
         inicializarEstruturas();
     }
 
     public ACOKnapsack(Item[] itens, int capacidade) {
-        this(itens, capacidade, 30, 200, 1.0, 3.0, 0.30, 0.01, 2.0, System.nanoTime());
+        this(itens, capacidade, 30, 300, 1.0, 3.0, 0.2, 1.0, 80, System.nanoTime());
     }
 
     private void inicializarEstruturas() {
         int n = itens.length;
         tau = new double[n];
         eta = new double[n];
-        Arrays.fill(tau, 1.0);
 
         double maxRatio = 0.0;
         for (Item it : itens) {
@@ -118,36 +110,66 @@ public class ACOKnapsack {
             double ratio = (double) itens[i].valor / itens[i].peso;
             eta[i] = ratio / maxRatio;
         }
+
+        Arrays.fill(tau, 1.0);
     }
 
     public Solucao resolver() {
-        Solucao melhorGlobal = null;
+        Solucao melhorGlobal = buscaGulosaInicial();
+        atualizarLimitesFeromona(melhorGlobal);
 
+        int semMelhoria = 0;
         for (int t = 0; t < iteracoes; t++) {
-            List<Solucao> solucoes = new ArrayList<>(numFormigas);
+            Solucao melhorIteracao = null;
 
             for (int k = 0; k < numFormigas; k++) {
                 Solucao s = construirSolucao();
-                solucoes.add(s);
-                if (melhorGlobal == null || s.valorTotal > melhorGlobal.valorTotal) {
-                    melhorGlobal = s;
+                s = buscaLocal1Flip(s);
+                if (melhorIteracao == null || s.valorTotal > melhorIteracao.valorTotal) {
+                    melhorIteracao = s;
                 }
             }
 
+            if (melhorIteracao != null && melhorIteracao.valorTotal > melhorGlobal.valorTotal) {
+                melhorGlobal = melhorIteracao;
+                semMelhoria = 0;
+                atualizarLimitesFeromona(melhorGlobal);
+            } else {
+                semMelhoria++;
+            }
+
             evaporarFeromonas();
-
-            for (Solucao s : solucoes) {
-                depositarFeromonas(s, 1.0);
-            }
-
             if (melhorGlobal != null) {
-                depositarFeromonas(melhorGlobal, fatorElite);
+                depositarFeromonas(melhorGlobal);
             }
+            limitarFeromonas();
 
-            limitarFeromonas(1e-6, 1e6);
+            if (semMelhoria >= limiteSemMelhoria) {
+                reinicializarFeromonas();
+                semMelhoria = 0;
+            }
         }
 
         return melhorGlobal;
+    }
+
+    private Solucao buscaGulosaInicial() {
+        Integer[] idx = new Integer[itens.length];
+        for (int i = 0; i < idx.length; i++) idx[i] = i;
+        Arrays.sort(idx, (a, b) -> Double.compare((double) itens[b].valor / itens[b].peso, (double) itens[a].valor / itens[a].peso));
+
+        boolean[] esc = new boolean[itens.length];
+        int peso = 0;
+        int valor = 0;
+        for (int i : idx) {
+            if (peso + itens[i].peso <= capacidade) {
+                esc[i] = true;
+                peso += itens[i].peso;
+                valor += itens[i].valor;
+            }
+        }
+
+        return new Solucao(esc, valor, peso);
     }
 
     private Solucao construirSolucao() {
@@ -156,53 +178,87 @@ public class ACOKnapsack {
         int peso = 0;
         int valor = 0;
 
-        boolean progresso;
-        do {
-            progresso = false;
+        List<Integer> naoVisitados = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) naoVisitados.add(i);
 
+        while (!naoVisitados.isEmpty()) {
             List<Integer> candidatos = new ArrayList<>();
-            for (int i = 0; i < n; i++) {
-                if (!escolhidos[i] && (peso + itens[i].peso) <= capacidade) {
+            for (int i : naoVisitados) {
+                if (peso + itens[i].peso <= capacidade) {
                     candidatos.add(i);
                 }
             }
-
             if (candidatos.isEmpty()) break;
 
-            double[] atr = new double[candidatos.size()];
-            double soma = 0.0;
-            for (int idx = 0; idx < candidatos.size(); idx++) {
-                int i = candidatos.get(idx);
-                double a = Math.pow(tau[i], alpha) * Math.pow(eta[i], beta);
-                if (a < 1e-12) a = 1e-12;
-                atr[idx] = a;
-                soma += a;
-            }
-
-            if (soma <= 0.0) break;
-
-            double r = rng.nextDouble() * soma;
-            int escolhidoIdx = -1;
-            double acum = 0.0;
-            for (int idx = 0; idx < candidatos.size(); idx++) {
-                acum += atr[idx];
-                if (acum >= r) {
-                    escolhidoIdx = candidatos.get(idx);
-                    break;
-                }
-            }
-            if (escolhidoIdx == -1) {
-                escolhidoIdx = candidatos.get(candidatos.size() - 1);
-            }
-
-            escolhidos[escolhidoIdx] = true;
-            peso += itens[escolhidoIdx].peso;
-            valor += itens[escolhidoIdx].valor;
-            progresso = true;
-
-        } while (progresso && peso < capacidade);
+            int escolhido = selecionarProximo(candidatos);
+            escolhidos[escolhido] = true;
+            peso += itens[escolhido].peso;
+            valor += itens[escolhido].valor;
+            naoVisitados.remove((Integer) escolhido);
+        }
 
         return new Solucao(escolhidos, valor, peso);
+    }
+
+    private int selecionarProximo(List<Integer> candidatos) {
+        double[] probabilidades = new double[candidatos.size()];
+        double soma = 0.0;
+
+        for (int i = 0; i < candidatos.size(); i++) {
+            int idx = candidatos.get(i);
+            double atratividade = Math.pow(tau[idx], alpha) * Math.pow(eta[idx], beta);
+            if (atratividade < 1e-12) atratividade = 1e-12;
+            probabilidades[i] = atratividade;
+            soma += atratividade;
+        }
+
+        double r = rng.nextDouble() * soma;
+        double acumulado = 0.0;
+        for (int i = 0; i < candidatos.size(); i++) {
+            acumulado += probabilidades[i];
+            if (acumulado >= r) {
+                return candidatos.get(i);
+            }
+        }
+        return candidatos.get(candidatos.size() - 1);
+    }
+
+    private Solucao buscaLocal1Flip(Solucao base) {
+        boolean[] esc = Arrays.copyOf(base.escolhidos, base.escolhidos.length);
+        int melhorValor = base.valorTotal;
+        int melhorPeso = base.pesoTotal;
+        boolean melhorou;
+
+        do {
+            melhorou = false;
+            for (int i = 0; i < esc.length; i++) {
+                boolean novoEstado = !esc[i];
+                int novoPeso = melhorPeso + (novoEstado ? itens[i].peso : -itens[i].peso);
+                int novoValor = melhorValor + (novoEstado ? itens[i].valor : -itens[i].valor);
+                if (novoEstado && novoPeso > capacidade) {
+                    continue;
+                }
+                if (novoValor > melhorValor) {
+                    esc[i] = novoEstado;
+                    melhorValor = novoValor;
+                    melhorPeso = novoPeso;
+                    melhorou = true;
+                }
+            }
+        } while (melhorou);
+
+        return new Solucao(esc, melhorValor, melhorPeso);
+    }
+
+    private double tauMin = 1e-6;
+    private double tauMax = 1e6;
+
+    private void atualizarLimitesFeromona(Solucao melhor) {
+        double z = Math.max(1.0, melhor.valorTotal);
+        tauMax = 1.0 / (rho * z);
+        tauMin = tauMax / (2.0 * itens.length);
+        if (tauMin <= 0.0 || !Double.isFinite(tauMin)) tauMin = 1e-6;
+        if (tauMax <= tauMin || !Double.isFinite(tauMax)) tauMax = tauMin * 1000.0;
     }
 
     private void evaporarFeromonas() {
@@ -212,9 +268,8 @@ public class ACOKnapsack {
         }
     }
 
-    private void depositarFeromonas(Solucao s, double multiplicador) {
-        double deposito = q * s.valorTotal * multiplicador;
-        if (deposito <= 0) return;
+    private void depositarFeromonas(Solucao s) {
+        double deposito = q / Math.max(1.0, s.valorTotal);
         for (int i = 0; i < s.escolhidos.length; i++) {
             if (s.escolhidos[i]) {
                 tau[i] += deposito;
@@ -222,36 +277,32 @@ public class ACOKnapsack {
         }
     }
 
-    private void limitarFeromonas(double tauMin, double tauMax) {
+    private void limitarFeromonas() {
         for (int i = 0; i < tau.length; i++) {
             if (tau[i] < tauMin) tau[i] = tauMin;
             if (tau[i] > tauMax) tau[i] = tauMax;
         }
     }
 
+    private void reinicializarFeromonas() {
+        Arrays.fill(tau, tauMax);
+    }
+
     public static Instancia carregarInstancia(Path path) throws IOException {
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String primeira = br.readLine();
-            if (primeira == null) {
-                throw new IllegalArgumentException("Instância vazia: " + path);
-            }
+            if (primeira == null) throw new IllegalArgumentException("Instância vazia: " + path);
 
             int n = Integer.parseInt(primeira.trim());
-            if (n <= 0) {
-                throw new IllegalArgumentException("Número de itens inválido em " + path + ": " + n);
-            }
+            if (n <= 0) throw new IllegalArgumentException("Número de itens inválido em " + path + ": " + n);
 
             Item[] itens = new Item[n];
             for (int i = 0; i < n; i++) {
                 String linha = br.readLine();
-                if (linha == null) {
-                    throw new IllegalArgumentException("Faltam linhas de itens em " + path + " (esperado: " + n + ")");
-                }
+                if (linha == null) throw new IllegalArgumentException("Faltam linhas de itens em " + path);
 
                 String[] partes = linha.trim().split("\\s+");
-                if (partes.length < 3) {
-                    throw new IllegalArgumentException("Linha de item inválida em " + path + ": \"" + linha + "\"");
-                }
+                if (partes.length < 3) throw new IllegalArgumentException("Linha de item inválida: " + linha);
 
                 int lucro = Integer.parseInt(partes[1]);
                 int peso = Integer.parseInt(partes[2]);
@@ -259,9 +310,8 @@ public class ACOKnapsack {
             }
 
             String capacidadeLinha = br.readLine();
-            if (capacidadeLinha == null) {
-                throw new IllegalArgumentException("Linha de capacidade ausente em " + path);
-            }
+            if (capacidadeLinha == null) throw new IllegalArgumentException("Linha de capacidade ausente em " + path);
+
             int capacidade = Integer.parseInt(capacidadeLinha.trim());
             return new Instancia(itens, capacidade);
         }
@@ -269,18 +319,18 @@ public class ACOKnapsack {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
-            System.err.println("Uso: java ACOKnapsack <arquivo-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--elite E] [--seed S]");
+            System.err.println("Uso: java org.ant.ACOKnapsack <arquivo-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]");
             System.exit(1);
         }
 
         Path instanciaPath = Path.of(args[0]);
         int ants = 30;
-        int iters = 200;
+        int iters = 300;
         double alpha = 1.0;
         double beta = 3.0;
-        double rho = 0.30;
-        double q = 0.01;
-        double elite = 2.0;
+        double rho = 0.2;
+        double q = 1.0;
+        int stall = 80;
         long seed = System.nanoTime();
 
         for (int i = 1; i < args.length; i++) {
@@ -292,14 +342,13 @@ public class ACOKnapsack {
                 case "--beta" -> beta = Double.parseDouble(args[++i]);
                 case "--rho" -> rho = Double.parseDouble(args[++i]);
                 case "--q" -> q = Double.parseDouble(args[++i]);
-                case "--elite" -> elite = Double.parseDouble(args[++i]);
+                case "--stall" -> stall = Integer.parseInt(args[++i]);
                 case "--seed" -> seed = Long.parseLong(args[++i]);
                 default -> throw new IllegalArgumentException("Parâmetro desconhecido: " + arg);
             }
         }
 
         Instancia instancia = carregarInstancia(instanciaPath);
-
         ACOKnapsack aco = new ACOKnapsack(
                 instancia.itens,
                 instancia.capacidade,
@@ -309,12 +358,11 @@ public class ACOKnapsack {
                 beta,
                 rho,
                 q,
-                elite,
+                stall,
                 seed
         );
 
         Solucao melhor = aco.resolver();
-
         System.out.println("Arquivo: " + instanciaPath);
         System.out.println("Capacidade: " + instancia.capacidade);
         System.out.println("Itens: " + instancia.itens.length);
