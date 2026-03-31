@@ -67,7 +67,7 @@ public class AcoCore {
     }
 
     public Solucao resolver() {
-        // MMAS: começa com uma solução greedy para ter um bom ponto inicial x*.
+        // MMAS: começa com uma solução gulosa para ter um bom ponto inicial x*.
         Solucao melhorGlobal = construirSolucaoGulosaInicial();
         atualizarLimitesFeromonio(melhorGlobal);
 
@@ -174,7 +174,7 @@ public class AcoCore {
             List<Integer> candidatos = new ArrayList<>();
 
             for (int indice : naoVisitados) {
-                // Gestão de feasibilidade (seção 2.3):
+                // Gestão de viabilidade (seção 2.3):
                 // só considera item que ainda cabe na capacidade residual.
                 if (pesoAtual + itens[indice].peso <= capacidade) {
                     candidatos.add(indice);

@@ -64,7 +64,7 @@ public class ACOKnapsack {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
-            System.err.println("Uso: java org.ant.ACOKnapsack <arquivo-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]");
+            System.err.println("Utilização: java org.ant.ACOKnapsack <ficheiro-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]");
             System.exit(1);
         }
 
@@ -108,7 +108,7 @@ public class ACOKnapsack {
         );
 
         Solucao melhor = aco.resolver();
-        System.out.println("Arquivo: " + instanciaPath);
+        System.out.println("Ficheiro: " + instanciaPath);
         System.out.println("Capacidade: " + instancia.capacidade);
         System.out.println("Itens: " + instancia.itens.length);
         System.out.println("Melhor valor: " + melhor.valorTotal);
@@ -130,6 +130,6 @@ public class ACOKnapsack {
             }
         }
         System.out.println();
-        System.out.println("Itens escolhidos detalhados (indice:valor:peso): " + itensDetalhados);
+        System.out.println("Itens escolhidos detalhados (índice:valor:peso): " + itensDetalhados);
     }
 }
