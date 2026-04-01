@@ -1,10 +1,10 @@
-package org.metaheuristicas.ant;
+package org.metaheuristicas.knapsack;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class AntApplicationTests {
+class KnapsackApplicationTests {
 
     @Test
     void contextLoads() {

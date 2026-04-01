@@ -1,7 +1,7 @@
-package org.metaheuristicas.ant.common.knapsack.io;
+package org.metaheuristicas.knapsack.common.knapsack.io;
 
-import org.metaheuristicas.ant.common.knapsack.model.Instancia;
-import org.metaheuristicas.ant.common.knapsack.model.Item;
+import org.metaheuristicas.knapsack.common.knapsack.model.Instancia;
+import org.metaheuristicas.knapsack.common.knapsack.model.Item;
 
 import java.io.BufferedReader;
 import java.io.IOException;
