@@ -114,22 +114,11 @@ public class ACOKnapsack {
         System.out.println("Melhor valor: " + melhor.valorTotal);
         System.out.println("Peso total: " + melhor.pesoTotal);
         System.out.print("Itens escolhidos (índices): ");
-        StringBuilder itensDetalhados = new StringBuilder();
         for (int i = 0; i < instancia.itens.length; i++) {
             if (melhor.escolhidos[i]) {
                 System.out.print(i + " ");
-                if (itensDetalhados.length() > 0) {
-                    itensDetalhados.append(" | ");
-                }
-                itensDetalhados
-                        .append(i)
-                        .append(":")
-                        .append(instancia.itens[i].valor)
-                        .append(":")
-                        .append(instancia.itens[i].peso);
             }
         }
         System.out.println();
-        System.out.println("Itens escolhidos detalhados (índice:valor:peso): " + itensDetalhados);
     }
 }
