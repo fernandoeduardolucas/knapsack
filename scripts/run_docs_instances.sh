@@ -96,7 +96,7 @@ mkdir -p "$(dirname "$REPORT_OUT")"
 # f = 0.1 -> parâmetro f do gerador
 # epsilon = 0.0001 -> parâmetro epsilon do gerador
 # s = 100 -> seed/semente usada na geração da instância
-printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
+printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,valor_otimo,diferenca_para_otimo,leitura\n' > "$CSV_OUT"
 
 if [[ -f "$OPTIMAL_PROPS" ]]; then
   {
@@ -181,20 +181,9 @@ for file in "${instances[@]}"; do
   peso_total="$(printf '%s\n' "$output" | awk -F': ' '/^Peso total: / {print $2; exit}')"
   itens_escolhidos="$(printf '%s\n' "$output" | sed -n 's/^Itens escolhidos (índices): //p' | head -n 1 | xargs)"
 
-  # Ordem do printf segue a legenda do cabeçalho CSV acima.
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s"\n' \
-    "$nome" \
-    "${n_param:-}" \
-    "${c_param:-}" \
-    "${g_param:-}" \
-    "${f_param:-}" \
-    "${eps_param:-}" \
-    "${s_param:-}" \
-    "${capacidade:-}" \
-    "${itens:-}" \
-    "${melhor_valor:-}" \
-    "${peso_total:-}" \
-    "${itens_escolhidos:-}" >> "$CSV_OUT"
+  optimal_csv=""
+  diff_csv=""
+  leitura_csv=""
 
   if [[ -f "$OPTIMAL_PROPS" && "$nome_base" =~ ^n_[0-9]+_[0-9]+$ ]]; then
     optimal="$(get_optimal_value "$nome_base")"
@@ -215,6 +204,10 @@ for file in "${instances[@]}"; do
         leitura="inconsistente"
       fi
 
+      optimal_csv="$optimal"
+      diff_csv="$diff"
+      leitura_csv="$leitura"
+
       {
         printf '| %s | %s | %s | %s | %s |\n' \
           "$nome_base" \
@@ -225,6 +218,24 @@ for file in "${instances[@]}"; do
       } >> "$REPORT_OUT"
     fi
   fi
+
+  # Ordem do printf segue a legenda do cabeçalho CSV acima.
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"%s",%s,%s,%s\n' \
+    "$nome" \
+    "${n_param:-}" \
+    "${c_param:-}" \
+    "${g_param:-}" \
+    "${f_param:-}" \
+    "${eps_param:-}" \
+    "${s_param:-}" \
+    "${capacidade:-}" \
+    "${itens:-}" \
+    "${melhor_valor:-}" \
+    "${peso_total:-}" \
+    "${itens_escolhidos:-}" \
+    "${optimal_csv:-}" \
+    "${diff_csv:-}" \
+    "${leitura_csv:-}" >> "$CSV_OUT"
   echo
 
 done
