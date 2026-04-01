@@ -1,4 +1,4 @@
-package org.ant.knapsack.model;
+package org.metaheuristicas.ant.knapsack.model;
 
 public class Solucao {
     public final boolean[] escolhidos;

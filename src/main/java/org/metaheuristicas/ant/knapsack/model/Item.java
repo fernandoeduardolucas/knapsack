@@ -1,4 +1,4 @@
-package org.ant.knapsack.model;
+package org.metaheuristicas.ant.knapsack.model;
 
 public class Item {
     public final long peso;

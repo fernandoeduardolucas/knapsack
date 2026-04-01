@@ -1,7 +1,7 @@
-package org.ant.knapsack.algo;
+package org.metaheuristicas.ant.knapsack.algo;
 
-import org.ant.knapsack.model.Item;
-import org.ant.knapsack.model.Solucao;
+import org.metaheuristicas.ant.knapsack.model.Item;
+import org.metaheuristicas.ant.knapsack.model.Solucao;
 
 import java.util.ArrayList;
 import java.util.Arrays;

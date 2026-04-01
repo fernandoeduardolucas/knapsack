@@ -1,10 +1,10 @@
-package org.ant;
+package org.metaheuristicas.ant;
 
-import org.ant.knapsack.algo.AcoCore;
-import org.ant.knapsack.io.InstanciaLoader;
-import org.ant.knapsack.model.Instancia;
-import org.ant.knapsack.model.Item;
-import org.ant.knapsack.model.Solucao;
+import org.metaheuristicas.ant.knapsack.algo.AcoCore;
+import org.metaheuristicas.ant.knapsack.io.InstanciaLoader;
+import org.metaheuristicas.ant.knapsack.model.Instancia;
+import org.metaheuristicas.ant.knapsack.model.Item;
+import org.metaheuristicas.ant.knapsack.model.Solucao;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -13,7 +13,7 @@ import java.nio.file.Path;
  * ACO (MMAS simplificado) para o Problema da Mochila 0/1.
  *
  * <p>Esta classe é uma fachada: mantém API/CLI e delega o algoritmo para
- * {@link org.ant.knapsack.algo.AcoCore}, onde está a implementação comentada
+ * {@link org.metaheuristicas.ant.knapsack.algo.AcoCore}, onde está a implementação comentada
  * com base no documento {@code docs/03_Colonia_Formigas.docx}.
  */
 public class ACOKnapsack {
@@ -64,7 +64,7 @@ public class ACOKnapsack {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
-            System.err.println("Utilização: java org.ant.ACOKnapsack <ficheiro-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]");
+            System.err.println("Utilização: java org.metaheuristicas.ant.ACOKnapsack <ficheiro-instancia> [--ants N] [--iters N] [--alpha A] [--beta B] [--rho R] [--q Q] [--stall N] [--seed S]");
             System.exit(1);
         }
 

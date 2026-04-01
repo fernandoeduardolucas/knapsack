@@ -8,7 +8,7 @@
         <version>4.0.4</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>org.ant</groupId>
+    <groupId>org.metaheuristicas.ant</groupId>
     <artifactId>ant</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>ant</name>
