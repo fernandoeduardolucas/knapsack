@@ -8,34 +8,53 @@ HEURISTIC_NAME="${HEURISTIC_NAME:-aco}"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_results.csv}"
 REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_report.md}"
 OPTIMAL_PROPS="${OPTIMAL_PROPS:-$ROOT_DIR/src/main/resources/optimal-values.properties}"
+INSTANCE_NAME_PROPS="${INSTANCE_NAME_PROPS:-$ROOT_DIR/src/main/resources/instance-name-mapping.properties}"
 INSTANCE_FILTERS=()
 
+read_property() {
+  local props_file="$1"
+  local key="$2"
+  awk -F'=' -v k="$key" '
+    /^[[:space:]]*($|#|!)/ { next }
+    {
+      line = $0
+      split(line, pair, "=")
+      current_key = pair[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", current_key)
+      if (current_key == k) {
+        sub(/^[^=]*=/, "", line)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+        print line
+        exit
+      }
+    }
+  ' "$props_file"
+}
+
 map_instance_name() {
-  # Compatível com Bash 3.x (macOS), evitando arrays associativos.
-  case "$1" in
-    n_1000_1) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_100" ;;
-    n_1000_2) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.0001_s_300" ;;
-    n_1000_3) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_100" ;;
-    n_1000_4) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_200" ;;
-    n_1000_5) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.01_s_300" ;;
-    n_1000_6) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_100" ;;
-    n_1000_7) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_200" ;;
-    n_1000_8) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0.1_s_300" ;;
-    n_1000_9) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0_s_100" ;;
-    n_1000_10) printf '%s\n' "n_1000_c_10000000000_g_10_f_0.1_eps_0_s_200" ;;
-    *) printf '%s\n' "$1" ;;
-  esac
+  local original="$1"
+  local mapped=""
+  if [[ -f "$INSTANCE_NAME_PROPS" ]]; then
+    mapped="$(read_property "$INSTANCE_NAME_PROPS" "$original")"
+  fi
+  if [[ -n "$mapped" ]]; then
+    printf '%s\n' "$mapped"
+  else
+    printf '%s\n' "$original"
+  fi
 }
 
 get_optimal_value() {
   local instancia="$1"
-  local line
-  line="$(grep -E "^${instancia}=" "$OPTIMAL_PROPS" | head -n 1 || true)"
-  if [[ -z "$line" ]]; then
+  local optimal=""
+  if [[ -f "$OPTIMAL_PROPS" ]]; then
+    optimal="$(read_property "$OPTIMAL_PROPS" "$instancia")"
+  fi
+  if [[ -z "$optimal" ]]; then
     printf '%s\n' ""
     return 0
   fi
-  printf '%s\n' "${line#*=}"
+  printf '%s\n' "$optimal"
 }
 
 format_number() {
