@@ -108,11 +108,7 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
       if /I "!K!"=="Itens" set "ITENS=!V!"
       if /I "!K!"=="Melhor valor" set "MELHOR_VALOR=!V!"
       if /I "!K!"=="Peso total" set "PESO_TOTAL=!V!"
-    )
-
-    for /f "usebackq tokens=* delims=" %%L in (`findstr /B /C:"Itens escolhidos (índices): " "!OUTPUT_FILE!"`) do (
-      set "ITENS_ESCOLHIDOS=%%L"
-      set "ITENS_ESCOLHIDOS=!ITENS_ESCOLHIDOS:Itens escolhidos (índices): =!"
+      if /I "!K:~0,16!"=="Itens escolhidos" set "ITENS_ESCOLHIDOS=!V!"
     )
 
     echo "!NAME!" | findstr /R "^n_[0-9][0-9]*_[0-9][0-9]*$" >nul
