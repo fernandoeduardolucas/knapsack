@@ -1,8 +1,8 @@
-package org.ant;
+package org.metaheuristicas.ant;
 
-import org.ant.knapsack.model.Instancia;
-import org.ant.knapsack.model.Item;
-import org.ant.knapsack.model.Solucao;
+import org.metaheuristicas.ant.knapsack.model.Instancia;
+import org.metaheuristicas.ant.knapsack.model.Item;
+import org.metaheuristicas.ant.knapsack.model.Solucao;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
