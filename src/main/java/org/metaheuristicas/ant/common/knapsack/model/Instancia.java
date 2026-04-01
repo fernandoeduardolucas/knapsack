@@ -1,4 +1,4 @@
-package org.metaheuristicas.ant.knapsack.model;
+package org.metaheuristicas.ant.common.knapsack.model;
 
 public class Instancia {
     public final Item[] itens;

@@ -1,10 +1,10 @@
 package org.metaheuristicas.ant;
 
 import org.metaheuristicas.ant.knapsack.algo.AcoCore;
-import org.metaheuristicas.ant.knapsack.io.InstanciaLoader;
-import org.metaheuristicas.ant.knapsack.model.Instancia;
-import org.metaheuristicas.ant.knapsack.model.Item;
-import org.metaheuristicas.ant.knapsack.model.Solucao;
+import org.metaheuristicas.ant.common.knapsack.io.InstanciaLoader;
+import org.metaheuristicas.ant.common.knapsack.model.Instancia;
+import org.metaheuristicas.ant.common.knapsack.model.Item;
+import org.metaheuristicas.ant.common.knapsack.model.Solucao;
 
 import java.io.IOException;
 import java.nio.file.Path;
