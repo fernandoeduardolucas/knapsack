@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS_DIR="${1:-$ROOT_DIR/docs}"
 SEARCH_DIR="$DOCS_DIR"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_results.csv}"
+REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_report.md}"
+OPTIMAL_PROPS="${OPTIMAL_PROPS:-$ROOT_DIR/src/main/resources/optimal-values.properties}"
 INSTANCE_FILTERS=()
 
 map_instance_name() {
@@ -24,6 +26,31 @@ map_instance_name() {
   esac
 }
 
+get_optimal_value() {
+  local instancia="$1"
+  local line
+  line="$(grep -E "^${instancia}=" "$OPTIMAL_PROPS" | head -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    printf '%s\n' ""
+    return 0
+  fi
+  printf '%s\n' "${line#*=}"
+}
+
+format_number() {
+  local n="$1"
+  local sign=""
+  local out=""
+  if [[ "$n" == -* ]]; then
+    sign="-"
+    n="${n#-}"
+  fi
+  while [[ ${#n} -gt 3 ]]; do
+    out=",${n: -3}${out}"
+    n="${n:0:${#n}-3}"
+  done
+  printf '%s%s%s\n' "$sign" "$n" "$out"
+}
 
 if [[ $# -ge 2 ]]; then
   INSTANCE_FILTERS=("${@:2}")
@@ -41,6 +68,7 @@ if [[ -d "$DOCS_DIR/Instancias" ]]; then
 fi
 
 mkdir -p "$(dirname "$CSV_OUT")"
+mkdir -p "$(dirname "$REPORT_OUT")"
 # Legenda de colunas de metadados no nome da instância:
 # n = 1000 -> número de itens
 # c = 10000000000 -> capacidade da mochila
@@ -49,6 +77,13 @@ mkdir -p "$(dirname "$CSV_OUT")"
 # epsilon = 0.0001 -> parâmetro epsilon do gerador
 # s = 100 -> seed/semente usada na geração da instância
 printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos\n' > "$CSV_OUT"
+
+if [[ -f "$OPTIMAL_PROPS" ]]; then
+  {
+    echo "| Instância | Teu melhor_valor | Ótimo (\`Optimal.pdf\`) | Diferença | Leitura |"
+    echo "| --------- | ---------------: | ----------------------: | --------: | ------- |"
+  } > "$REPORT_OUT"
+fi
 
 cd "$ROOT_DIR"
 ./mvnw -q -DskipTests compile
@@ -140,8 +175,41 @@ for file in "${instances[@]}"; do
     "${melhor_valor:-}" \
     "${peso_total:-}" \
     "${itens_escolhidos:-}" >> "$CSV_OUT"
+
+  if [[ -f "$OPTIMAL_PROPS" && "$nome_base" =~ ^n_[0-9]+_[0-9]+$ ]]; then
+    optimal="$(get_optimal_value "$nome_base")"
+    if [[ "$optimal" =~ ^[0-9]+$ && "${melhor_valor:-}" =~ ^[0-9]+$ ]]; then
+      diff=$((optimal - melhor_valor))
+      if (( diff >= 0 )); then
+        diff_text="$(format_number "$diff") abaixo"
+        if (( diff <= 1000 )); then
+          leitura="praticamente ótimo"
+        elif (( diff <= 20000 )); then
+          leitura="muito perto do ótimo"
+        else
+          leitura="abaixo do ótimo"
+        fi
+      else
+        diff_abs=$(( -diff ))
+        diff_text="**$(format_number "$diff_abs") acima**"
+        leitura="inconsistente"
+      fi
+
+      {
+        printf '| %s | %s | %s | %s | %s |\n' \
+          "$nome_base" \
+          "$(format_number "$melhor_valor")" \
+          "$(format_number "$optimal")" \
+          "$diff_text" \
+          "$leitura"
+      } >> "$REPORT_OUT"
+    fi
+  fi
   echo
 
 done
 
 echo "CSV gerado em: $CSV_OUT"
+if [[ -f "$OPTIMAL_PROPS" ]]; then
+  echo "Relatório markdown gerado em: $REPORT_OUT"
+fi
