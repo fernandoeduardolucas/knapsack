@@ -2,14 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOCS_DIR="${1:-$ROOT_DIR/docs}"
-SEARCH_DIR="$DOCS_DIR"
+SEARCH_DIR="${ROOT_DIR}/docs/inst_test/instancias"
 HEURISTIC_NAME="${HEURISTIC_NAME:-aco}"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_results.csv}"
 REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_report.md}"
 OPTIMAL_PROPS="${OPTIMAL_PROPS:-$ROOT_DIR/src/main/resources/optimal-values.properties}"
 INSTANCE_NAME_PROPS="${INSTANCE_NAME_PROPS:-$ROOT_DIR/src/main/resources/instance-name-mapping.properties}"
-INSTANCE_FILTERS=()
 
 read_property() {
   local props_file="$1"
@@ -72,19 +70,9 @@ format_number() {
   printf '%s%s%s\n' "$sign" "$n" "$out"
 }
 
-if [[ $# -ge 2 ]]; then
-  INSTANCE_FILTERS=("${@:2}")
-fi
-
-if [[ ! -d "$DOCS_DIR" ]]; then
-  echo "Pasta docs não encontrada: $DOCS_DIR" >&2
+if [[ ! -d "$SEARCH_DIR" ]]; then
+  echo "Pasta de instâncias não encontrada: $SEARCH_DIR" >&2
   exit 1
-fi
-
-# Quando houver uma subpasta "Instancias", processa apenas ela.
-# Isso evita tentar executar arquivos como README.txt que não são instâncias.
-if [[ -d "$DOCS_DIR/Instancias" ]]; then
-  SEARCH_DIR="$DOCS_DIR/Instancias"
 fi
 
 mkdir -p "$(dirname "$CSV_OUT")"
@@ -137,20 +125,6 @@ for file in "${instances[@]}"; do
     f_param="${BASH_REMATCH[4]}"
     eps_param="${BASH_REMATCH[5]}"
     s_param="${BASH_REMATCH[6]}"
-  fi
-
-  if [[ ${#INSTANCE_FILTERS[@]} -gt 0 ]]; then
-    manter=0
-    for filtro in "${INSTANCE_FILTERS[@]}"; do
-      filtro_base="${filtro%.*}"
-      if [[ "$nome" == "$filtro" || "$nome_base" == "$filtro" || "$nome_base" == "$filtro_base" ]]; then
-        manter=1
-        break
-      fi
-    done
-    if [[ $manter -eq 0 ]]; then
-      continue
-    fi
   fi
 
   if [[ "$nome" =~ ^[Rr][Ee][Aa][Dd][Mm][Ee](\..*)?$ ]]; then
