@@ -72,7 +72,7 @@ mkdir -p "$(dirname "$REPORT_OUT")"
 printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,valor_otimo,diferenca_para_otimo,leitura\n' > "$CSV_OUT"
 
 if [[ -f "$OPTIMAL_PROPS" ]]; then
-  echo "instancia,teu_melhor_valor,valor_otimo,diferenca_para_otimo,leitura" > "$REPORT_OUT"
+  echo "instancia,melhor_valor,valor_otimo,diferenca_para_otimo,leitura" > "$REPORT_OUT"
 fi
 
 cd "$ROOT_DIR"
