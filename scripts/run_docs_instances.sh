@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEARCH_DIR="${ROOT_DIR}/docs/inst_test/instancias"
 HEURISTIC_NAME="${HEURISTIC_NAME:-aco}"
 CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_results.csv}"
-REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_report.md}"
+REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_report.csv}"
 OPTIMAL_PROPS="${OPTIMAL_PROPS:-$ROOT_DIR/src/main/resources/optimal-values.properties}"
 INSTANCE_NAME_PROPS="${INSTANCE_NAME_PROPS:-$ROOT_DIR/src/main/resources/instance-name-mapping.properties}"
 
@@ -55,21 +55,6 @@ get_optimal_value() {
   printf '%s\n' "$optimal"
 }
 
-format_number() {
-  local n="$1"
-  local sign=""
-  local out=""
-  if [[ "$n" == -* ]]; then
-    sign="-"
-    n="${n#-}"
-  fi
-  while [[ ${#n} -gt 3 ]]; do
-    out=",${n: -3}${out}"
-    n="${n:0:${#n}-3}"
-  done
-  printf '%s%s%s\n' "$sign" "$n" "$out"
-}
-
 if [[ ! -d "$SEARCH_DIR" ]]; then
   echo "Pasta de instâncias não encontrada: $SEARCH_DIR" >&2
   exit 1
@@ -87,10 +72,7 @@ mkdir -p "$(dirname "$REPORT_OUT")"
 printf 'instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,valor_otimo,diferenca_para_otimo,leitura\n' > "$CSV_OUT"
 
 if [[ -f "$OPTIMAL_PROPS" ]]; then
-  {
-    echo "| Instância | Teu melhor_valor | Ótimo (\`Optimal.pdf\`) | Diferença | Leitura |"
-    echo "| --------- | ---------------: | ----------------------: | --------: | ------- |"
-  } > "$REPORT_OUT"
+  echo "instancia,teu_melhor_valor,valor_otimo,diferenca_para_otimo,leitura" > "$REPORT_OUT"
 fi
 
 cd "$ROOT_DIR"
@@ -181,7 +163,6 @@ for file in "${instances[@]}"; do
     if [[ "$optimal" =~ ^[0-9]+$ && "${melhor_valor:-}" =~ ^[0-9]+$ ]]; then
       diff=$((optimal - melhor_valor))
       if (( diff >= 0 )); then
-        diff_text="$(format_number "$diff") abaixo"
         if (( diff <= 1000 )); then
           leitura="praticamente ótimo"
         elif (( diff <= 20000 )); then
@@ -190,8 +171,6 @@ for file in "${instances[@]}"; do
           leitura="abaixo do ótimo"
         fi
       else
-        diff_abs=$(( -diff ))
-        diff_text="**$(format_number "$diff_abs") acima**"
         leitura="inconsistente"
       fi
 
@@ -199,14 +178,12 @@ for file in "${instances[@]}"; do
       diff_csv="$diff"
       leitura_csv="$leitura"
 
-      {
-        printf '| %s | %s | %s | %s | %s |\n' \
-          "$nome_base" \
-          "$(format_number "$melhor_valor")" \
-          "$(format_number "$optimal")" \
-          "$diff_text" \
-          "$leitura"
-      } >> "$REPORT_OUT"
+      printf '%s,%s,%s,%s,%s\n' \
+        "$nome_base" \
+        "$melhor_valor" \
+        "$optimal" \
+        "$diff" \
+        "$leitura" >> "$REPORT_OUT"
     fi
   fi
 
@@ -233,5 +210,5 @@ done
 
 echo "CSV gerado em: $CSV_OUT"
 if [[ -f "$OPTIMAL_PROPS" ]]; then
-  echo "Relatório markdown gerado em: $REPORT_OUT"
+  echo "Relatório CSV gerado em: $REPORT_OUT"
 fi
