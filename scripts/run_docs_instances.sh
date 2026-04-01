@@ -117,7 +117,7 @@ for file in "${instances[@]}"; do
     java_args+=("--seed" "$s_param")
   fi
 
-  output="$(java -cp target/classes org.ant.ACOKnapsack "${java_args[@]}")"
+  output="$(java -cp target/classes org.metaheuristicas.ant.ACOKnapsack "${java_args[@]}")"
   echo "$output"
 
   capacidade="$(printf '%s\n' "$output" | awk -F': ' '/^Capacidade: / {print $2; exit}')"
