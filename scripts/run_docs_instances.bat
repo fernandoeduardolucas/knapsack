@@ -25,6 +25,7 @@ if defined JAVA_BIN_DIR (
 :after_java_home
 if "%HEURISTIC_NAME%"=="" set "HEURISTIC_NAME=aco"
 if "%CSV_OUT%"=="" set "CSV_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_results.csv"
+if "%CSV_REPORT_OUT%"=="" set "CSV_REPORT_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_report.csv"
 if "%OPTIMAL_PROPS%"=="" set "OPTIMAL_PROPS=%ROOT_DIR%\src\main\resources\optimal-values.properties"
 if "%INSTANCE_NAME_PROPS%"=="" set "INSTANCE_NAME_PROPS=%ROOT_DIR%\src\main\resources\instance-name-mapping.properties"
 
@@ -36,8 +37,12 @@ if not exist "%SEARCH_DIR%" (
 for %%I in ("%CSV_OUT%") do (
   if not exist "%%~dpI" mkdir "%%~dpI" >nul 2>nul
 )
+for %%I in ("%CSV_REPORT_OUT%") do (
+  if not exist "%%~dpI" mkdir "%%~dpI" >nul 2>nul
+)
 
 echo instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,valor_otimo,diferenca_para_otimo,leitura>"%CSV_OUT%"
+echo instancia,teu_melhor_valor,otimo,diferenca,leitura>"%CSV_REPORT_OUT%"
 
 pushd "%ROOT_DIR%" || exit /b 1
 
@@ -61,6 +66,7 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
   set "S_PARAM="
   set "OPTIMAL_CSV="
   set "DIFF_CSV="
+  set "DIFF_LABEL_CSV="
   set "LEITURA_CSV="
 
   echo %%F | findstr /R /I "^README\(\..*\)\?$" >nul && set "SKIP=1"
@@ -121,12 +127,17 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
           if "!IS_OPTIMAL_INT!"=="1" if "!IS_BEST_INT!"=="1" (
             set /a DIFF_CSV=!OPTIMAL_CSV!-!MELHOR_VALOR!
             if !DIFF_CSV! LSS 0 (
+              set /a DIFF_ABS=0-!DIFF_CSV!
+              set "DIFF_LABEL_CSV=!DIFF_ABS! acima"
               set "LEITURA_CSV=inconsistente"
             ) else if !DIFF_CSV! LEQ 1000 (
+              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
               set "LEITURA_CSV=praticamente ótimo"
             ) else if !DIFF_CSV! LEQ 20000 (
+              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
               set "LEITURA_CSV=muito perto do ótimo"
             ) else (
+              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
               set "LEITURA_CSV=abaixo do ótimo"
             )
           )
@@ -135,6 +146,9 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
     )
 
     >>"%CSV_OUT%" echo %%F,!N_PARAM!,!C_PARAM!,!G_PARAM!,!F_PARAM!,!EPS_PARAM!,!S_PARAM!,!CAPACIDADE!,!ITENS!,!MELHOR_VALOR!,!PESO_TOTAL!,"!ITENS_ESCOLHIDOS!",!OPTIMAL_CSV!,!DIFF_CSV!,!LEITURA_CSV!
+    if defined OPTIMAL_CSV if defined MELHOR_VALOR if defined DIFF_LABEL_CSV (
+      >>"%CSV_REPORT_OUT%" echo !NAME!,!MELHOR_VALOR!,!OPTIMAL_CSV!,"!DIFF_LABEL_CSV!",!LEITURA_CSV!
+    )
 
     del /q "!OUTPUT_FILE!" >nul 2>nul
     echo.
@@ -146,6 +160,7 @@ if "%HAS_FILES%"=="0" (
 )
 
 echo CSV gerado em: "%CSV_OUT%"
+echo CSV de relatorio gerado em: "%CSV_REPORT_OUT%"
 
 popd
 exit /b 0
