@@ -94,7 +94,24 @@ if [[ -f "$OPTIMAL_PROPS" ]]; then
 fi
 
 cd "$ROOT_DIR"
-./mvnw -q -DskipTests compile
+compile_project() {
+  if [[ -x "$ROOT_DIR/mvnw" ]]; then
+    if "$ROOT_DIR/mvnw" -q -DskipTests compile; then
+      return 0
+    fi
+    echo "Aviso: falha ao compilar com ./mvnw, tentando Maven do PATH..." >&2
+  fi
+
+  if command -v mvn >/dev/null 2>&1; then
+    mvn -q -DskipTests compile
+    return 0
+  fi
+
+  echo "Erro: não foi possível compilar (./mvnw e mvn indisponíveis)." >&2
+  return 1
+}
+
+compile_project
 
 instances=()
 while IFS= read -r file; do
