@@ -1,13 +1,13 @@
-package org.metaheuristicas.ant;
+package org.metaheuristicas.knapsack;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class AntApplication {
+public class KnapsackApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(AntApplication.class, args);
+        SpringApplication.run(KnapsackApplication.class, args);
     }
 
 }
