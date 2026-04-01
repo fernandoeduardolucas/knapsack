@@ -25,7 +25,12 @@ if defined JAVA_BIN_DIR (
 :after_java_home
 if "%HEURISTIC_NAME%"=="" set "HEURISTIC_NAME=aco"
 if "%CSV_OUT%"=="" set "CSV_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_results.csv"
-if "%CSV_REPORT_OUT%"=="" set "CSV_REPORT_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_report.csv"
+if "%REPORT_OUT%"=="" (
+  if not "%CSV_REPORT_OUT%"=="" (
+    set "REPORT_OUT=%CSV_REPORT_OUT%"
+  )
+)
+if "%REPORT_OUT%"=="" set "REPORT_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_report.md"
 if "%OPTIMAL_PROPS%"=="" set "OPTIMAL_PROPS=%ROOT_DIR%\src\main\resources\optimal-values.properties"
 if "%INSTANCE_NAME_PROPS%"=="" set "INSTANCE_NAME_PROPS=%ROOT_DIR%\src\main\resources\instance-name-mapping.properties"
 
@@ -37,16 +42,19 @@ if not exist "%SEARCH_DIR%" (
 for %%I in ("%CSV_OUT%") do (
   if not exist "%%~dpI" mkdir "%%~dpI" >nul 2>nul
 )
-for %%I in ("%CSV_REPORT_OUT%") do (
+for %%I in ("%REPORT_OUT%") do (
   if not exist "%%~dpI" mkdir "%%~dpI" >nul 2>nul
 )
 
 echo instancia,n,c,g,f,eps,s,capacidade,itens,melhor_valor,peso_total,itens_escolhidos,valor_otimo,diferenca_para_otimo,leitura>"%CSV_OUT%"
-echo instancia,teu_melhor_valor,otimo,diferenca,leitura>"%CSV_REPORT_OUT%"
+(
+  echo ^| Instância ^| Teu melhor_valor ^| Ótimo ^(`Optimal.pdf`^) ^| Diferença ^| Leitura ^|
+  echo ^| --------- ^| ---------------: ^| ----------------------: ^| --------: ^| ------- ^|
+)> "%REPORT_OUT%"
 
 pushd "%ROOT_DIR%" || exit /b 1
 
-call mvnw.cmd -q -DskipTests compile
+call :compile_project
 if errorlevel 1 (
   popd
   exit /b 1
@@ -66,8 +74,10 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
   set "S_PARAM="
   set "OPTIMAL_CSV="
   set "DIFF_CSV="
-  set "DIFF_LABEL_CSV="
+  set "DIFF_LABEL_MD="
   set "LEITURA_CSV="
+  set "BEST_FMT="
+  set "OPTIMAL_FMT="
 
   echo %%F | findstr /R /I "^README\(\..*\)\?$" >nul && set "SKIP=1"
 
@@ -128,26 +138,33 @@ for /f "delims=" %%F in ('dir /b /a-d /on "%SEARCH_DIR%"') do (
             set /a DIFF_CSV=!OPTIMAL_CSV!-!MELHOR_VALOR!
             if !DIFF_CSV! LSS 0 (
               set /a DIFF_ABS=0-!DIFF_CSV!
-              set "DIFF_LABEL_CSV=!DIFF_ABS! acima"
+              call :format_number !DIFF_ABS! DIFF_ABS_FMT
+              set "DIFF_LABEL_MD=**!DIFF_ABS_FMT! acima**"
               set "LEITURA_CSV=inconsistente"
             ) else if !DIFF_CSV! LEQ 1000 (
-              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
+              call :format_number !DIFF_CSV! DIFF_FMT
+              set "DIFF_LABEL_MD=!DIFF_FMT! abaixo"
               set "LEITURA_CSV=praticamente ótimo"
             ) else if !DIFF_CSV! LEQ 20000 (
-              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
+              call :format_number !DIFF_CSV! DIFF_FMT
+              set "DIFF_LABEL_MD=!DIFF_FMT! abaixo"
               set "LEITURA_CSV=muito perto do ótimo"
             ) else (
-              set "DIFF_LABEL_CSV=!DIFF_CSV! abaixo"
+              call :format_number !DIFF_CSV! DIFF_FMT
+              set "DIFF_LABEL_MD=!DIFF_FMT! abaixo"
               set "LEITURA_CSV=abaixo do ótimo"
             )
+
+            call :format_number !MELHOR_VALOR! BEST_FMT
+            call :format_number !OPTIMAL_CSV! OPTIMAL_FMT
           )
         )
       )
     )
 
     >>"%CSV_OUT%" echo %%F,!N_PARAM!,!C_PARAM!,!G_PARAM!,!F_PARAM!,!EPS_PARAM!,!S_PARAM!,!CAPACIDADE!,!ITENS!,!MELHOR_VALOR!,!PESO_TOTAL!,"!ITENS_ESCOLHIDOS!",!OPTIMAL_CSV!,!DIFF_CSV!,!LEITURA_CSV!
-    if defined OPTIMAL_CSV if defined MELHOR_VALOR if defined DIFF_LABEL_CSV (
-      >>"%CSV_REPORT_OUT%" echo !NAME!,!MELHOR_VALOR!,!OPTIMAL_CSV!,"!DIFF_LABEL_CSV!",!LEITURA_CSV!
+    if defined OPTIMAL_CSV if defined MELHOR_VALOR if defined DIFF_LABEL_MD (
+      >>"%REPORT_OUT%" echo ^| !NAME! ^| !BEST_FMT! ^| !OPTIMAL_FMT! ^| !DIFF_LABEL_MD! ^| !LEITURA_CSV! ^|
     )
 
     del /q "!OUTPUT_FILE!" >nul 2>nul
@@ -160,9 +177,46 @@ if "%HAS_FILES%"=="0" (
 )
 
 echo CSV gerado em: "%CSV_OUT%"
-echo CSV de relatorio gerado em: "%CSV_REPORT_OUT%"
+echo Relatorio markdown gerado em: "%REPORT_OUT%"
 
 popd
+exit /b 0
+
+:compile_project
+if exist "mvnw.cmd" (
+  call mvnw.cmd -q -DskipTests compile
+  if not errorlevel 1 exit /b 0
+  echo Aviso: falha ao compilar com mvnw.cmd, tentando Maven do PATH...
+)
+
+where mvn >nul 2>nul
+if errorlevel 1 (
+  echo Erro: nao foi possivel compilar (mvnw.cmd e mvn indisponiveis).
+  exit /b 1
+)
+
+call mvn -q -DskipTests compile
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:format_number
+setlocal EnableDelayedExpansion
+set "NUM=%~1"
+set "SIGN="
+if "!NUM:~0,1!"=="-" (
+  set "SIGN=-"
+  set "NUM=!NUM:~1!"
+)
+set "OUT="
+:format_loop
+if "!NUM:~3!"=="" goto format_done
+set "LAST3=!NUM:~-3!"
+set "OUT=,!LAST3!!OUT!"
+set "NUM=!NUM:~0,-3!"
+goto format_loop
+:format_done
+set "OUT=!SIGN!!NUM!!OUT!"
+endlocal & set "%~2=%OUT%"
 exit /b 0
 
 :get_property
