@@ -4,8 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS_DIR="${1:-$ROOT_DIR/docs}"
 SEARCH_DIR="$DOCS_DIR"
-CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_results.csv}"
-REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_report.md}"
+HEURISTIC_NAME="${HEURISTIC_NAME:-aco}"
+CSV_OUT="${CSV_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_results.csv}"
+REPORT_OUT="${REPORT_OUT:-$ROOT_DIR/results/docs_instances_${HEURISTIC_NAME}_report.md}"
 OPTIMAL_PROPS="${OPTIMAL_PROPS:-$ROOT_DIR/src/main/resources/optimal-values.properties}"
 INSTANCE_FILTERS=()
 
