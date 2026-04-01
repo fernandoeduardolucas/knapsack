@@ -7,6 +7,22 @@ set "ROOT_DIR=%~dp0.."
 for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 set "SEARCH_DIR=%ROOT_DIR%\docs\inst_test\instancias"
 
+REM Tenta configurar JAVA_HOME automaticamente a partir do java no PATH
+if "%JAVA_HOME%"=="" (
+  for /f "delims=" %%J in ('where java 2^>nul') do (
+    set "JAVA_EXE=%%~fJ"
+    goto :resolve_java_home
+  )
+)
+goto :after_java_home
+
+:resolve_java_home
+for %%J in ("%JAVA_EXE%") do set "JAVA_BIN_DIR=%%~dpJ"
+if defined JAVA_BIN_DIR (
+  for %%J in ("%JAVA_BIN_DIR%..") do set "JAVA_HOME=%%~fJ"
+)
+
+:after_java_home
 if "%HEURISTIC_NAME%"=="" set "HEURISTIC_NAME=aco"
 if "%CSV_OUT%"=="" set "CSV_OUT=%ROOT_DIR%\results\docs_instances_%HEURISTIC_NAME%_results.csv"
 
