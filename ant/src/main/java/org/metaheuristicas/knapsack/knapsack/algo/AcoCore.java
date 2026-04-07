@@ -70,6 +70,8 @@ public class AcoCore {
         // MMAS: começa com uma solução gulosa para ter um bom ponto inicial x*.
         Solucao melhorGlobal = construirSolucaoGulosaInicial();
         atualizarLimitesFeromonio(melhorGlobal);
+        // MMAS: inicialização uniforme no limite superior.
+        reiniciarFeromonio();
 
         int semMelhoria = 0;
 
@@ -165,60 +167,40 @@ public class AcoCore {
         long pesoAtual = 0;
         long valorAtual = 0;
 
-        List<Integer> naoVisitados = new ArrayList<>(itens.length);
+        List<Integer> ordemItens = new ArrayList<>(itens.length);
         for (int i = 0; i < itens.length; i++) {
-            naoVisitados.add(i);
+            ordemItens.add(i);
         }
+        java.util.Collections.shuffle(ordemItens, rng);
 
-        while (!naoVisitados.isEmpty()) {
-            List<Integer> candidatos = new ArrayList<>();
-
-            for (int indice : naoVisitados) {
-                // Gestão de viabilidade (seção 2.3):
-                // só considera item que ainda cabe na capacidade residual.
-                if (pesoAtual + itens[indice].peso <= capacidade) {
-                    candidatos.add(indice);
-                }
+        for (int indice : ordemItens) {
+            long capacidadeResidual = capacidade - pesoAtual;
+            // Gestão de viabilidade (seção 2.3): se não cabe, exclui automaticamente.
+            if (itens[indice].peso > capacidadeResidual) {
+                continue;
             }
 
-            if (candidatos.isEmpty()) {
-                break;
-            }
+            // Regra binária de decisão (seção 2.2):
+            // P(x_i = 1) = (tau_i^alpha * eta_i^beta) / (tau_i^alpha * eta_i^beta + (1-tau_i)^alpha)
+            double tauNormalizado = normalizarTauParaProbabilidade(tau[indice]);
+            double incluir = Math.pow(tauNormalizado, alpha) * Math.pow(eta[indice], beta);
+            double excluir = Math.pow(Math.max(1e-12, 1.0 - tauNormalizado), alpha);
+            double probIncluir = incluir / Math.max(1e-12, incluir + excluir);
 
-            int escolhido = selecionarItem(candidatos);
-            escolhidos[escolhido] = true;
-            pesoAtual += itens[escolhido].peso;
-            valorAtual += itens[escolhido].valor;
-            naoVisitados.remove((Integer) escolhido);
+            if (rng.nextDouble() < probIncluir) {
+                escolhidos[indice] = true;
+                pesoAtual += itens[indice].peso;
+                valorAtual += itens[indice].valor;
+            }
         }
 
         return new Solucao(escolhidos, valorAtual, pesoAtual);
     }
 
-    private int selecionarItem(List<Integer> candidatos) {
-        double[] probabilidades = new double[candidatos.size()];
-        double soma = 0.0;
-
-        for (int i = 0; i < candidatos.size(); i++) {
-            int indice = candidatos.get(i);
-            // Regra de decisão: atratividade = tau^alpha * eta^beta (seção 2.2).
-            double atratividade = Math.pow(tau[indice], alpha) * Math.pow(eta[indice], beta);
-            atratividade = Math.max(atratividade, 1e-12);
-            probabilidades[i] = atratividade;
-            soma += atratividade;
-        }
-
-        double sorteio = rng.nextDouble() * soma;
-        double acumulado = 0.0;
-
-        for (int i = 0; i < candidatos.size(); i++) {
-            acumulado += probabilidades[i];
-            if (acumulado >= sorteio) {
-                return candidatos.get(i);
-            }
-        }
-
-        return candidatos.get(candidatos.size() - 1);
+    private double normalizarTauParaProbabilidade(double tauValue) {
+        double denominador = Math.max(1e-12, tauMax - tauMin);
+        double normalizado = (tauValue - tauMin) / denominador;
+        return Math.min(1.0 - 1e-12, Math.max(1e-12, normalizado));
     }
 
     private Solucao melhorarComBuscaLocal1Flip(Solucao base) {
@@ -264,6 +246,10 @@ public class AcoCore {
         if (tauMax <= tauMin || !Double.isFinite(tauMax)) {
             tauMax = tauMin * 1000.0;
         }
+
+        // A regra binária de decisão usa (1 - tau_i), portanto mantém tau no intervalo (0,1).
+        tauMax = Math.min(0.999999, tauMax);
+        tauMin = Math.max(1e-6, Math.min(tauMin, tauMax / 2.0));
     }
 
     private void evaporarFeromonio() {
@@ -274,7 +260,7 @@ public class AcoCore {
     }
 
     private void depositarFeromonio(Solucao melhor) {
-        double deposito = q / Math.max(1.0, melhor.valorTotal);
+        double deposito = 1.0 / Math.max(1.0, melhor.valorTotal);
         for (int i = 0; i < melhor.escolhidos.length; i++) {
             if (melhor.escolhidos[i]) {
                 tau[i] += deposito;
