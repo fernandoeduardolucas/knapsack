@@ -36,7 +36,7 @@ public final class MMASExperimentRunner {
     public static void main(String[] args) throws Exception {
         Path propertiesPath = args.length > 0
                 ? Path.of(args[0])
-                : Path.of("src/main/resources/mmas-experiments.properties");
+                : Path.of("ant/src/main/resources/mmas-experiments.properties");
 
         Properties p = carregarProperties(propertiesPath);
 
