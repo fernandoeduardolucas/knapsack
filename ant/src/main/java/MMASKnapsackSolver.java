@@ -131,9 +131,15 @@ public class MMASKnapsackSolver {
         KnapsackSolution solution = new KnapsackSolution(n);
         int[] order = shuffledOrder(n, random);
 
-        for (int itemIndex : order) {
+        for (int position = 0; position < order.length; position++) {
+            int itemIndex = order[position];
             Item item = instance.getItems().get(itemIndex);
             long remainingCapacity = solution.getRemainingCapacity(instance.getCapacity());
+
+            // Se já não existir qualquer item restante que caiba, a construção termina.
+            if (!hasFeasibleRemainingItem(instance, order, position, remainingCapacity)) {
+                break;
+            }
 
             // Regra de feasibilidade: se não couber, não pode ser escolhido.
             if (item.getWeight() > remainingCapacity) {
@@ -161,6 +167,23 @@ public class MMASKnapsackSolver {
         }
 
         return solution;
+    }
+
+    /**
+     * Verifica se existe pelo menos um item ainda não processado que seja feasível
+     * para a capacidade residual atual.
+     */
+    private boolean hasFeasibleRemainingItem(KnapsackInstance instance,
+                                             int[] order,
+                                             int currentPosition,
+                                             long remainingCapacity) {
+        for (int position = currentPosition; position < order.length; position++) {
+            Item candidate = instance.getItems().get(order[position]);
+            if (candidate.getWeight() <= remainingCapacity) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
