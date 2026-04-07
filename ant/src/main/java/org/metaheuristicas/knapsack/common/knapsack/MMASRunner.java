@@ -1,6 +1,6 @@
-package org.metaheuristicas.knapsack.experiments;
+package org.metaheuristicas.knapsack.common.knapsack;
 
-import org.metaheuristicas.knapsack.ACOKnapsack;
+import org.metaheuristicas.knapsack.common.knapsack.model.ACOKnapsack;
 import org.metaheuristicas.knapsack.common.knapsack.model.Instancia;
 import org.metaheuristicas.knapsack.common.knapsack.model.Solucao;
 
@@ -28,9 +28,9 @@ import java.util.stream.Stream;
  * <p>Lê um ficheiro de propriedades (por omissão, {@code src/main/resources/mmas-experiments.properties})
  * e executa uma grelha de combinações de parâmetros para permitir análise de performance.
  */
-public final class MMASExperimentRunner {
+public final class MMASRunner {
 
-    private MMASExperimentRunner() {
+    private MMASRunner() {
     }
 
     public static void main(String[] args) throws Exception {
@@ -57,7 +57,7 @@ public final class MMASExperimentRunner {
             throw new IllegalArgumentException("mmas.parallelism deve ser > 0");
         }
 
-        Path output = Path.of(p.getProperty("mmas.output.csv", "results/mmas-grid-results.csv"));
+        Path output = Path.of(p.getProperty("mmas.output.csv"));
         Path outputParent = output.getParent();
         if (outputParent != null) {
             Files.createDirectories(outputParent);

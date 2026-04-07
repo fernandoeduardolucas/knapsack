@@ -1,4 +1,4 @@
-package org.metaheuristicas.knapsack.knapsack.algo;
+package org.metaheuristicas.knapsack.common.knapsack.core;
 
 import org.metaheuristicas.knapsack.common.knapsack.model.Item;
 import org.metaheuristicas.knapsack.common.knapsack.model.Solucao;

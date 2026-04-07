@@ -30,7 +30,7 @@ mvn -DskipTests compile
 Executar com o ficheiro de propriedades por omissão:
 
 ```bash
-java -cp target/classes org.metaheuristicas.knapsack.experiments.MMASExperimentRunner
+java -cp target/classes org.metaheuristicas.knapsack.common.knapsack.MMASExperimentRunner
 ```
 
 No ficheiro default, está configurado `mmas.instances.dir=docs/inst_test/instancias`,
@@ -39,7 +39,7 @@ ou seja, corre para todas as instâncias dessa pasta.
 Ou com outro ficheiro de propriedades:
 
 ```bash
-java -cp target/classes org.metaheuristicas.knapsack.experiments.MMASExperimentRunner caminho/para/propriedades.properties
+java -cp target/classes org.metaheuristicas.knapsack.common.knapsack.MMASExperimentRunner caminho/para/propriedades.properties
 ```
 
 ## Saída
