@@ -15,6 +15,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.stream.Stream;
 
 /**
@@ -45,6 +50,12 @@ public final class MMASExperimentRunner {
         List<Double> qs = parseDoubleList(p, "mmas.q", 1.0);
         List<Integer> stalls = parseIntList(p, "mmas.stall.limit", 80);
         List<Long> seeds = parseLongList(p, "mmas.seed", 12345L);
+        int paralelismo = Integer.parseInt(
+                p.getProperty("mmas.parallelism", String.valueOf(Runtime.getRuntime().availableProcessors()))
+        );
+        if (paralelismo <= 0) {
+            throw new IllegalArgumentException("mmas.parallelism deve ser > 0");
+        }
 
         Path output = Path.of(p.getProperty("mmas.output.csv", "results/mmas-grid-results.csv"));
         Path outputParent = output.getParent();
@@ -55,78 +66,36 @@ public final class MMASExperimentRunner {
         int totalRuns = instancias.size() * ants.size() * iters.size() * alphas.size() * betas.size()
                 * rhos.size() * qs.size() * stalls.size() * seeds.size();
 
-        System.out.printf("Iniciando experiências MMAS (%d execuções)...%n", totalRuns);
+        System.out.printf(
+                "Iniciando experiências MMAS (%d execuções, paralelismo=%d)...%n",
+                totalRuns,
+                paralelismo
+        );
 
-        try (BufferedWriter writer = Files.newBufferedWriter(output)) {
-            writer.write("instance,ants,iterations,alpha,beta,rho,q,stall,seed,best_value,total_weight,elapsed_ms");
-            writer.newLine();
+        List<ExperimentTask> tasks = new ArrayList<>(totalRuns);
+        for (String instanciaPath : instancias) {
+            Instancia instancia = ACOKnapsack.carregarInstancia(Path.of(instanciaPath));
 
-            int run = 0;
-            for (String instanciaPath : instancias) {
-                Instancia instancia = ACOKnapsack.carregarInstancia(Path.of(instanciaPath));
-
-                for (int ant : ants) {
-                    for (int iter : iters) {
-                        for (double alpha : alphas) {
-                            for (double beta : betas) {
-                                for (double rho : rhos) {
-                                    for (double q : qs) {
-                                        for (int stall : stalls) {
-                                            for (long seed : seeds) {
-                                                run++;
-                                                Instant inicio = Instant.now();
-
-                                                ACOKnapsack solver = new ACOKnapsack(
-                                                        instancia.itens,
-                                                        instancia.capacidade,
-                                                        ant,
-                                                        iter,
-                                                        alpha,
-                                                        beta,
-                                                        rho,
-                                                        q,
-                                                        stall,
-                                                        seed
-                                                );
-
-                                                Solucao melhor = solver.resolver();
-                                                long elapsedMs = Duration.between(inicio, Instant.now()).toMillis();
-
-                                                writer.write(String.format(
-                                                        Locale.US,
-                                                        "%s,%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%d,%d",
-                                                        instanciaPath,
-                                                        ant,
-                                                        iter,
-                                                        alpha,
-                                                        beta,
-                                                        rho,
-                                                        q,
-                                                        stall,
-                                                        seed,
-                                                        melhor.valorTotal,
-                                                        melhor.pesoTotal,
-                                                        elapsedMs
-                                                ));
-                                                writer.newLine();
-
-                                                System.out.printf(
-                                                        "[%d/%d] %s | ants=%d it=%d a=%.2f b=%.2f rho=%.2f q=%.2f stall=%d seed=%d => valor=%d, %d ms%n",
-                                                        run,
-                                                        totalRuns,
-                                                        instanciaPath,
-                                                        ant,
-                                                        iter,
-                                                        alpha,
-                                                        beta,
-                                                        rho,
-                                                        q,
-                                                        stall,
-                                                        seed,
-                                                        melhor.valorTotal,
-                                                        elapsedMs
-                                                );
-                                            }
+            for (int ant : ants) {
+                for (int iter : iters) {
+                    for (double alpha : alphas) {
+                        for (double beta : betas) {
+                            for (double rho : rhos) {
+                                for (double q : qs) {
+                                    for (int stall : stalls) {
+                                        for (long seed : seeds) {
+                                            tasks.add(new ExperimentTask(
+                                                    instanciaPath,
+                                                    instancia,
+                                                    ant,
+                                                    iter,
+                                                    alpha,
+                                                    beta,
+                                                    rho,
+                                                    q,
+                                                    stall,
+                                                    seed
+                                            ));
                                         }
                                     }
                                 }
@@ -137,7 +106,60 @@ public final class MMASExperimentRunner {
             }
         }
 
+        try (BufferedWriter writer = Files.newBufferedWriter(output)) {
+            writer.write("instance,ants,iterations,alpha,beta,rho,q,stall,seed,best_value,total_weight,elapsed_ms");
+            writer.newLine();
+
+            executarExperimentosParalelos(tasks, paralelismo, writer, totalRuns);
+        }
+
         System.out.println("Experiências concluídas. CSV: " + output);
+    }
+
+    private static void executarExperimentosParalelos(
+            List<ExperimentTask> tasks,
+            int paralelismo,
+            BufferedWriter writer,
+            int totalRuns
+    ) throws IOException, InterruptedException {
+        ExecutorService executor = Executors.newFixedThreadPool(paralelismo);
+        CompletionService<ExperimentResult> completion = new ExecutorCompletionService<>(executor);
+        try {
+            for (ExperimentTask task : tasks) {
+                completion.submit(task::execute);
+            }
+
+            for (int concluido = 1; concluido <= tasks.size(); concluido++) {
+                ExperimentResult resultado;
+                try {
+                    resultado = completion.take().get();
+                } catch (ExecutionException e) {
+                    throw new IllegalStateException("Falha ao executar configuração MMAS", e.getCause());
+                }
+
+                writer.write(resultado.csvLine());
+                writer.newLine();
+
+                System.out.printf(
+                        "[%d/%d] %s | ants=%d it=%d a=%.2f b=%.2f rho=%.2f q=%.2f stall=%d seed=%d => valor=%d, %d ms%n",
+                        concluido,
+                        totalRuns,
+                        resultado.instanciaPath(),
+                        resultado.ant(),
+                        resultado.iter(),
+                        resultado.alpha(),
+                        resultado.beta(),
+                        resultado.rho(),
+                        resultado.q(),
+                        resultado.stall(),
+                        resultado.seed(),
+                        resultado.valorTotal(),
+                        resultado.elapsedMs()
+                );
+            }
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     private static Properties carregarProperties(Path path) throws IOException {
@@ -223,5 +245,86 @@ public final class MMASExperimentRunner {
             parsed.add(Double.parseDouble(token.trim()));
         }
         return parsed;
+    }
+
+    private record ExperimentTask(
+            String instanciaPath,
+            Instancia instancia,
+            int ant,
+            int iter,
+            double alpha,
+            double beta,
+            double rho,
+            double q,
+            int stall,
+            long seed
+    ) {
+        ExperimentResult execute() {
+            Instant inicio = Instant.now();
+
+            ACOKnapsack solver = new ACOKnapsack(
+                    instancia.itens,
+                    instancia.capacidade,
+                    ant,
+                    iter,
+                    alpha,
+                    beta,
+                    rho,
+                    q,
+                    stall,
+                    seed
+            );
+
+            Solucao melhor = solver.resolver();
+            long elapsedMs = Duration.between(inicio, Instant.now()).toMillis();
+            return new ExperimentResult(
+                    instanciaPath,
+                    ant,
+                    iter,
+                    alpha,
+                    beta,
+                    rho,
+                    q,
+                    stall,
+                    seed,
+                    melhor.valorTotal,
+                    melhor.pesoTotal,
+                    elapsedMs
+            );
+        }
+    }
+
+    private record ExperimentResult(
+            String instanciaPath,
+            int ant,
+            int iter,
+            double alpha,
+            double beta,
+            double rho,
+            double q,
+            int stall,
+            long seed,
+            long valorTotal,
+            long pesoTotal,
+            long elapsedMs
+    ) {
+        String csvLine() {
+            return String.format(
+                    Locale.US,
+                    "%s,%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%d,%d",
+                    instanciaPath,
+                    ant,
+                    iter,
+                    alpha,
+                    beta,
+                    rho,
+                    q,
+                    stall,
+                    seed,
+                    valorTotal,
+                    pesoTotal,
+                    elapsedMs
+            );
+        }
     }
 }
