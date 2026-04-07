@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,6 +128,26 @@ public class PropertiesExperimentLoader {
             } else if (key.startsWith("n_") && properties.getProperty(key).contains("_c_")) {
                 instances.put(key.trim(), properties.getProperty(key).trim());
             }
+        }
+
+        if (!instances.isEmpty()) {
+            return instances;
+        }
+
+        try {
+            Path instancesDir = getInstancesDir();
+            if (!Files.exists(instancesDir) || !Files.isDirectory(instancesDir)) {
+                return instances;
+            }
+
+            try (var stream = Files.list(instancesDir)) {
+                stream.filter(Files::isRegularFile)
+                        .map(path -> path.getFileName().toString())
+                        .sorted(Comparator.naturalOrder())
+                        .forEach(fileName -> instances.put(fileName, fileName));
+            }
+        } catch (IOException ignored) {
+            // Mantém o comportamento atual: se não conseguir listar, devolve vazio.
         }
 
         return instances;

@@ -18,12 +18,13 @@ public class Main {
     public static void main(String[] args) {
         Locale.setDefault(Locale.US);
 
+        Path propertiesPath;
         if (args.length == 0) {
-            System.err.println("Uso: java Main <ficheiro.properties>");
-            System.exit(1);
+            propertiesPath = Path.of("ant/src/main/resources/test.properties");
+            System.out.println("Sem parâmetros: a usar ficheiro por omissão " + propertiesPath);
+        } else {
+            propertiesPath = Path.of(args[0]);
         }
-
-        Path propertiesPath = Path.of(args[0]);
         try {
             PropertiesExperimentLoader loader = new PropertiesExperimentLoader(propertiesPath);
             Path instancesDir = loader.getInstancesDir();
