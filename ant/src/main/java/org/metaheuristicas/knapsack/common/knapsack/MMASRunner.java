@@ -42,22 +42,28 @@ public final class MMASRunner {
 
         List<String> instancias = resolverInstancias(p);
 
-        List<Integer> ants = parseIntList(p, "mmas.ants", 30);
-        List<Integer> iters = parseIntList(p, "mmas.iterations", 300);
-        List<Double> alphas = parseDoubleList(p, "mmas.alpha", 1.0);
-        List<Double> betas = parseDoubleList(p, "mmas.beta", 3.0);
-        List<Double> rhos = parseDoubleList(p, "mmas.rho", 0.2);
-        List<Double> qs = parseDoubleList(p, "mmas.q", 1.0);
-        List<Integer> stalls = parseIntList(p, "mmas.stall.limit", 80);
-        List<Long> seeds = parseLongList(p, "mmas.seed", 12345L);
+        // Nomes alinhados ao documento (com fallback para nomes legacy).
+        List<Integer> ants = parseIntList(p, 30, "mmas.numero.formigas", "mmas.ants");
+        List<Integer> iters = parseIntList(p, 300, "mmas.numero.ciclos", "mmas.iterations");
+        List<Double> alphas = parseDoubleList(p, 1.0, "mmas.peso.feromona", "mmas.alpha");
+        List<Double> betas = parseDoubleList(p, 3.0, "mmas.peso.heuristica", "mmas.beta");
+        List<Double> rhos = parseDoubleList(p, 0.2, "mmas.taxa.evaporacao", "mmas.rho");
+        List<Double> qs = parseDoubleList(p, 1.0, "mmas.intensidade.deposito", "mmas.q");
+        List<Integer> stalls = parseIntList(p, 80, "mmas.ciclos.sem.melhoria", "mmas.stall.limit");
+        List<Long> seeds = parseLongList(p, 12345L, "mmas.semente", "mmas.seed");
         int paralelismo = Integer.parseInt(
-                p.getProperty("mmas.parallelism", String.valueOf(Runtime.getRuntime().availableProcessors()))
+                readPropertyFirst(
+                        p,
+                        String.valueOf(Runtime.getRuntime().availableProcessors()),
+                        "mmas.paralelismo",
+                        "mmas.parallelism"
+                )
         );
         if (paralelismo <= 0) {
             throw new IllegalArgumentException("mmas.parallelism deve ser > 0");
         }
 
-        Path output = Path.of(p.getProperty("mmas.output.csv"));
+        Path output = Path.of(readPropertyFirst(p, "results/ant/mmas-grid-results.csv", "mmas.saida.csv", "mmas.output.csv"));
         Path outputParent = output.getParent();
         if (outputParent != null) {
             Files.createDirectories(outputParent);
@@ -141,7 +147,7 @@ public final class MMASRunner {
                 writer.newLine();
 
                 System.out.printf(
-                        "[%d/%d] %s | ants=%d it=%d a=%.2f b=%.2f rho=%.2f q=%.2f stall=%d seed=%d => valor=%d, %d ms%n",
+                        "[%d/%d] %s | m=%d ciclos=%d alpha=%.2f beta=%.2f rho=%.2f q=%.2f sem_melhoria=%d seed=%d => valor=%d, %d ms%n",
                         concluido,
                         totalRuns,
                         resultado.instanciaPath(),
@@ -175,14 +181,14 @@ public final class MMASRunner {
     }
 
     private static List<String> resolverInstancias(Properties p) throws IOException {
-        List<String> instancias = parseStringList(p, "mmas.instances");
+        List<String> instancias = parseStringList(p, "mmas.instancias", "mmas.instances");
         if (!instancias.isEmpty()) {
             return instancias;
         }
 
-        String dir = p.getProperty("mmas.instances.dir", "").trim();
+        String dir = readPropertyFirst(p, "", "mmas.instancias.dir", "mmas.instances.dir").trim();
         if (dir.isEmpty()) {
-            throw new IllegalArgumentException("Defina mmas.instances ou mmas.instances.dir");
+            throw new IllegalArgumentException("Defina mmas.instancias (ou mmas.instances) ou mmas.instancias.dir (ou mmas.instances.dir)");
         }
 
         Path base = Path.of(dir);
@@ -205,8 +211,18 @@ public final class MMASRunner {
         return ficheiros;
     }
 
-    private static List<String> parseStringList(Properties p, String key) {
-        String value = p.getProperty(key, "").trim();
+    private static String readPropertyFirst(Properties p, String fallback, String... keys) {
+        for (String key : keys) {
+            String value = p.getProperty(key);
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return fallback;
+    }
+
+    private static List<String> parseStringList(Properties p, String... keys) {
+        String value = readPropertyFirst(p, "", keys).trim();
         List<String> parsed = new ArrayList<>();
         if (value.isEmpty()) {
             return parsed;
@@ -220,8 +236,8 @@ public final class MMASRunner {
         return parsed;
     }
 
-    private static List<Integer> parseIntList(Properties p, String key, int fallback) {
-        String value = p.getProperty(key, String.valueOf(fallback));
+    private static List<Integer> parseIntList(Properties p, int fallback, String... keys) {
+        String value = readPropertyFirst(p, String.valueOf(fallback), keys);
         List<Integer> parsed = new ArrayList<>();
         for (String token : value.split(",")) {
             parsed.add(Integer.parseInt(token.trim()));
@@ -229,8 +245,8 @@ public final class MMASRunner {
         return parsed;
     }
 
-    private static List<Long> parseLongList(Properties p, String key, long fallback) {
-        String value = p.getProperty(key, String.valueOf(fallback));
+    private static List<Long> parseLongList(Properties p, long fallback, String... keys) {
+        String value = readPropertyFirst(p, String.valueOf(fallback), keys);
         List<Long> parsed = new ArrayList<>();
         for (String token : value.split(",")) {
             parsed.add(Long.parseLong(token.trim()));
@@ -238,8 +254,8 @@ public final class MMASRunner {
         return parsed;
     }
 
-    private static List<Double> parseDoubleList(Properties p, String key, double fallback) {
-        String value = p.getProperty(key, String.valueOf(fallback));
+    private static List<Double> parseDoubleList(Properties p, double fallback, String... keys) {
+        String value = readPropertyFirst(p, String.valueOf(fallback), keys);
         List<Double> parsed = new ArrayList<>();
         for (String token : value.split(",")) {
             parsed.add(Double.parseDouble(token.trim()));
