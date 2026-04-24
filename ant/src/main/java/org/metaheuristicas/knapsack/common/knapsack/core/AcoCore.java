@@ -99,8 +99,10 @@ public class AcoCore {
 
             // Atualização de feromonas do MMAS:
             // 1) evaporação global
+            // Diversificação: evaporação reduz reforços antigos e abre espaço para novas combinações.
             evaporarFeromonio();
             // 2) reforço só da melhor solução (estratégia best/global-best)
+            // Intensificação: reforço elitista concentra a busca na melhor solução conhecida.
             depositarFeromonio(melhorGlobal);
             // 3) truncamento em [tauMin, tauMax] para evitar estagnação
             limitarFeromonio();
@@ -171,6 +173,7 @@ public class AcoCore {
         for (int i = 0; i < itens.length; i++) {
             ordemItens.add(i);
         }
+        // Diversificação: embaralhar a ordem de visita dos itens aumenta a exploração estocástica.
         java.util.Collections.shuffle(ordemItens, rng);
 
         for (int indice : ordemItens) {
@@ -204,6 +207,7 @@ public class AcoCore {
     }
 
     private Solucao melhorarComBuscaLocal1Flip(Solucao base) {
+        // Intensificação: busca local explora a vizinhança imediata da solução para refinamento.
         boolean[] escolhidos = Arrays.copyOf(base.escolhidos, base.escolhidos.length);
         long melhorValor = base.valorTotal;
         long melhorPeso = base.pesoTotal;
