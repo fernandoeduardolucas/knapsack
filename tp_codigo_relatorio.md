@@ -377,6 +377,16 @@ Diferenças/pragmatismos de implementação:
 2. A ordem dos itens é embaralhada por formiga antes de decidir inclusão, adicionando diversidade estocástica adicional.
 3. Há proteção numérica explícita para manter probabilidades estáveis (evita divisão por zero e extremos exatos).
 
+### 8.1 Onde aparecem intensificação e diversificação no código
+
+- **Intensificação**
+  - no reforço elitista de feromônio: `depositarFeromonio(melhorGlobal)` (foco na melhor solução conhecida).
+  - na busca local 1-flip: `melhorarComBuscaLocal1Flip(...)` (refinamento da vizinhança da solução atual).
+- **Diversificação**
+  - na evaporação: `evaporarFeromonio()` (enfraquece trilhas antigas e evita convergência prematura).
+  - no embaralhamento dos itens: `Collections.shuffle(...)` durante a construção probabilística.
+  - na reinicialização por estagnação: `reiniciarFeromonio()` quando o contador `semMelhoria` atinge o limite.
+
 ---
 
 ## 9) Conclusão
