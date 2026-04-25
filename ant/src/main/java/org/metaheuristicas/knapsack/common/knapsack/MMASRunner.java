@@ -12,8 +12,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
@@ -68,6 +70,16 @@ public final class MMASRunner {
         if (outputParent != null) {
             Files.createDirectories(outputParent);
         }
+        Path detailedOutput = Path.of(readPropertyFirst(
+                p,
+                "results/ant/mmas-detailed-results.csv",
+                "mmas.saida.relatorio",
+                "mmas.output.report"
+        ));
+        Path detailedOutputParent = detailedOutput.getParent();
+        if (detailedOutputParent != null) {
+            Files.createDirectories(detailedOutputParent);
+        }
 
         int totalRuns = instancias.size() * ants.size() * iters.size() * alphas.size() * betas.size()
                 * rhos.size() * qs.size() * stalls.size() * seeds.size();
@@ -112,21 +124,25 @@ public final class MMASRunner {
             }
         }
 
+        Map<String, ExperimentResult> melhorPorInstancia = new HashMap<>();
         try (BufferedWriter writer = Files.newBufferedWriter(output)) {
             writer.write("instance,ants,iterations,alpha,beta,rho,q,stall,seed,best_value,total_weight,elapsed_ms");
             writer.newLine();
 
-            executarExperimentosParalelos(tasks, paralelismo, writer, totalRuns);
+            executarExperimentosParalelos(tasks, paralelismo, writer, totalRuns, melhorPorInstancia);
         }
 
+        escreverRelatorioDetalhado(detailedOutput, melhorPorInstancia);
         System.out.println("Experiências concluídas. CSV: " + output);
+        System.out.println("Relatório detalhado: " + detailedOutput);
     }
 
     private static void executarExperimentosParalelos(
             List<ExperimentTask> tasks,
             int paralelismo,
             BufferedWriter writer,
-            int totalRuns
+            int totalRuns,
+            Map<String, ExperimentResult> melhorPorInstancia
     ) throws IOException, InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(paralelismo);
         CompletionService<ExperimentResult> completion = new ExecutorCompletionService<>(executor);
@@ -145,6 +161,7 @@ public final class MMASRunner {
 
                 writer.write(resultado.csvLine());
                 writer.newLine();
+                atualizarMelhorPorInstancia(melhorPorInstancia, resultado);
 
                 System.out.printf(
                         "[%d/%d] %s | m=%d ciclos=%d alpha=%.2f beta=%.2f rho=%.2f q=%.2f sem_melhoria=%d seed=%d => valor=%d, %d ms%n",
@@ -166,6 +183,51 @@ public final class MMASRunner {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    private static void atualizarMelhorPorInstancia(
+            Map<String, ExperimentResult> melhorPorInstancia,
+            ExperimentResult candidato
+    ) {
+        ExperimentResult atual = melhorPorInstancia.get(candidato.instanciaPath());
+        if (atual == null || candidato.isBetterThan(atual)) {
+            melhorPorInstancia.put(candidato.instanciaPath(), candidato);
+        }
+    }
+
+    private static void escreverRelatorioDetalhado(
+            Path detailedOutput,
+            Map<String, ExperimentResult> melhorPorInstancia
+    ) throws IOException {
+        List<ExperimentResult> resultadosOrdenados = melhorPorInstancia
+                .values()
+                .stream()
+                .sorted(Comparator.comparing(ExperimentResult::instanciaPath))
+                .toList();
+
+        try (BufferedWriter writer = Files.newBufferedWriter(detailedOutput)) {
+            writer.write("file,capacity,items,best_value,total_weight,selected_item_indices");
+            writer.newLine();
+
+            for (ExperimentResult resultado : resultadosOrdenados) {
+                writer.write(String.format(
+                        Locale.US,
+                        "%s,%d,%d,%d,%d,%s",
+                        toCsvField(Path.of(resultado.instanciaPath()).toAbsolutePath().toString()),
+                        resultado.capacidade(),
+                        resultado.totalItens(),
+                        resultado.valorTotal(),
+                        resultado.pesoTotal(),
+                        toCsvField(resultado.indicesEscolhidos())
+                ));
+                writer.newLine();
+            }
+        }
+    }
+
+    private static String toCsvField(String value) {
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
     }
 
     private static Properties carregarProperties(Path path) throws IOException {
@@ -295,6 +357,8 @@ public final class MMASRunner {
             long elapsedMs = Duration.between(inicio, Instant.now()).toMillis();
             return new ExperimentResult(
                     instanciaPath,
+                    instancia.capacidade,
+                    instancia.itens.length,
                     ant,
                     iter,
                     alpha,
@@ -305,13 +369,29 @@ public final class MMASRunner {
                     seed,
                     melhor.valorTotal,
                     melhor.pesoTotal,
+                    toIndicesString(melhor.escolhidos),
                     elapsedMs
             );
+        }
+
+        private static String toIndicesString(boolean[] escolhidos) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < escolhidos.length; i++) {
+                if (escolhidos[i]) {
+                    if (sb.length() > 0) {
+                        sb.append(' ');
+                    }
+                    sb.append(i);
+                }
+            }
+            return sb.toString();
         }
     }
 
     private record ExperimentResult(
             String instanciaPath,
+            long capacidade,
+            int totalItens,
             int ant,
             int iter,
             double alpha,
@@ -322,8 +402,19 @@ public final class MMASRunner {
             long seed,
             long valorTotal,
             long pesoTotal,
+            String indicesEscolhidos,
             long elapsedMs
     ) {
+        boolean isBetterThan(ExperimentResult other) {
+            if (valorTotal != other.valorTotal) {
+                return valorTotal > other.valorTotal;
+            }
+            if (pesoTotal != other.pesoTotal) {
+                return pesoTotal < other.pesoTotal;
+            }
+            return elapsedMs < other.elapsedMs;
+        }
+
         String csvLine() {
             return String.format(
                     Locale.US,
