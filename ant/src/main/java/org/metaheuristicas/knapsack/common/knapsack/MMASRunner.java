@@ -340,9 +340,7 @@ public final class MMASRunner {
         ExperimentResult execute() {
             Instant inicio = Instant.now();
 
-            ACOKnapsack solver = new ACOKnapsack(
-                    instancia.itens,
-                    instancia.capacidade,
+            ACOKnapsack.ParametrosMMAS parametros = new ACOKnapsack.ParametrosMMAS(
                     ant,
                     iter,
                     alpha,
@@ -353,7 +351,11 @@ public final class MMASRunner {
                     seed
             );
 
-            Solucao melhor = solver.resolver();
+            Solucao melhor = ACOKnapsack.resolverComParametros(
+                    instancia.itens,
+                    instancia.capacidade,
+                    parametros
+            );
             long elapsedMs = Duration.between(inicio, Instant.now()).toMillis();
             return new ExperimentResult(
                     instanciaPath,
