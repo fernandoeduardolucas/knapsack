@@ -80,6 +80,16 @@ public final class MMASRunner {
         if (detailedOutputParent != null) {
             Files.createDirectories(detailedOutputParent);
         }
+        Path initialOutput = Path.of(readPropertyFirst(
+                p,
+                "results/ant/mmas-initial-solutions.csv",
+                "mmas.saida.inicial",
+                "mmas.output.initial"
+        ));
+        Path initialOutputParent = initialOutput.getParent();
+        if (initialOutputParent != null) {
+            Files.createDirectories(initialOutputParent);
+        }
 
         int totalRuns = instancias.size() * ants.size() * iters.size() * alphas.size() * betas.size()
                 * rhos.size() * qs.size() * stalls.size() * seeds.size();
@@ -91,8 +101,10 @@ public final class MMASRunner {
         );
 
         List<ExperimentTask> tasks = new ArrayList<>(totalRuns);
+        Map<String, Instancia> instanciaPorPath = new HashMap<>();
         for (String instanciaPath : instancias) {
             Instancia instancia = ACOKnapsack.carregarInstancia(Path.of(instanciaPath));
+            instanciaPorPath.put(instanciaPath, instancia);
 
             for (int ant : ants) {
                 for (int iter : iters) {
@@ -124,6 +136,8 @@ public final class MMASRunner {
             }
         }
 
+        escreverRelatorioSolucoesIniciais(initialOutput, instanciaPorPath);
+
         Map<String, ExperimentResult> melhorPorInstancia = new HashMap<>();
         try (BufferedWriter writer = Files.newBufferedWriter(output)) {
             writer.write("instance,ants,iterations,alpha,beta,rho,q,stall,seed,best_value,total_weight,elapsed_ms");
@@ -135,6 +149,7 @@ public final class MMASRunner {
         escreverRelatorioDetalhado(detailedOutput, melhorPorInstancia);
         System.out.println("Experiências concluídas. CSV: " + output);
         System.out.println("Relatório detalhado: " + detailedOutput);
+        System.out.println("Relatório de soluções iniciais: " + initialOutput);
     }
 
     private static void executarExperimentosParalelos(
@@ -223,6 +238,75 @@ public final class MMASRunner {
                 writer.newLine();
             }
         }
+    }
+
+    private static void escreverRelatorioSolucoesIniciais(
+            Path initialOutput,
+            Map<String, Instancia> instanciaPorPath
+    ) throws IOException {
+        List<Map.Entry<String, Instancia>> instanciasOrdenadas = instanciaPorPath.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .toList();
+
+        try (BufferedWriter writer = Files.newBufferedWriter(initialOutput)) {
+            writer.write("file,capacity,items,initial_value,initial_weight,selected_item_indices");
+            writer.newLine();
+
+            for (Map.Entry<String, Instancia> entry : instanciasOrdenadas) {
+                Solucao inicial = construirSolucaoGulosaInicial(entry.getValue());
+                writer.write(String.format(
+                        Locale.US,
+                        "%s,%d,%d,%d,%d,%s",
+                        toCsvField(Path.of(entry.getKey()).toAbsolutePath().toString()),
+                        entry.getValue().capacidade,
+                        entry.getValue().itens.length,
+                        inicial.valorTotal,
+                        inicial.pesoTotal,
+                        toCsvField(toIndicesString(inicial.escolhidos))
+                ));
+                writer.newLine();
+            }
+        }
+    }
+
+    private static Solucao construirSolucaoGulosaInicial(Instancia instancia) {
+        Integer[] ordem = new Integer[instancia.itens.length];
+        for (int i = 0; i < instancia.itens.length; i++) {
+            ordem[i] = i;
+        }
+
+        java.util.Arrays.sort(ordem, (a, b) -> Double.compare(
+                (double) instancia.itens[b].valor / instancia.itens[b].peso,
+                (double) instancia.itens[a].valor / instancia.itens[a].peso
+        ));
+
+        boolean[] escolhidos = new boolean[instancia.itens.length];
+        long pesoAtual = 0;
+        long valorAtual = 0;
+
+        for (int indice : ordem) {
+            if (pesoAtual + instancia.itens[indice].peso <= instancia.capacidade) {
+                escolhidos[indice] = true;
+                pesoAtual += instancia.itens[indice].peso;
+                valorAtual += instancia.itens[indice].valor;
+            }
+        }
+
+        return new Solucao(escolhidos, valorAtual, pesoAtual);
+    }
+
+    private static String toIndicesString(boolean[] escolhidos) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < escolhidos.length; i++) {
+            if (escolhidos[i]) {
+                if (sb.length() > 0) {
+                    sb.append(' ');
+                }
+                sb.append(i);
+            }
+        }
+        return sb.toString();
     }
 
     private static String toCsvField(String value) {
@@ -376,18 +460,6 @@ public final class MMASRunner {
             );
         }
 
-        private static String toIndicesString(boolean[] escolhidos) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < escolhidos.length; i++) {
-                if (escolhidos[i]) {
-                    if (sb.length() > 0) {
-                        sb.append(' ');
-                    }
-                    sb.append(i);
-                }
-            }
-            return sb.toString();
-        }
     }
 
     private record ExperimentResult(
