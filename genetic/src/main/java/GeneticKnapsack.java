@@ -843,10 +843,9 @@ public final class GeneticKnapsack {
         private final boolean verbose;
 
         private Config(Map<String, String> options) {
-            // Caminho absoluto para a pasta que contém as instâncias de teste
-            Path defaultInst = Paths.get("/home/lm-think/dev/repos/git/knapsack/docs/inst_test/instancias");
-            // Caminho absoluto para o ficheiro CSV de resultados
-            Path defaultOut = Paths.get("/home/lm-think/dev/repos/git/knapsack/results/genetic/ag_resultados.csv");
+            Path defaultInst = resolveDefaultPath("docs", "inst_test", "instancias");
+            Path defaultOut = resolveDefaultPath("results", "genetic", "ag_resultados.csv");
+
             this.instanceDir = Paths.get(options.getOrDefault("--instances", defaultInst.toString()));
             this.outputCsv = Paths.get(options.getOrDefault("--output", defaultOut.toString()));
             this.populationSize = Integer.parseInt(options.getOrDefault("--population", "50"));
@@ -858,6 +857,54 @@ public final class GeneticKnapsack {
             this.maxWithoutImprovement = Integer.parseInt(options.getOrDefault("--stagnation", "100"));
             this.seed = Long.parseLong(options.getOrDefault("--seed", "42"));
             this.verbose = Boolean.parseBoolean(options.getOrDefault("--verbose", "false"));
+        }
+
+        /**
+         * Resolve caminhos padrão de forma portável, sem depender de um caminho absoluto
+         * específico da máquina do autor. Primeiro tenta localizar a raiz do repositório
+         * a partir do diretório de execução; se não conseguir, mantém o caminho relativo
+         * para continuar compatível com execuções a partir da raiz do projeto.
+         */
+        private static Path resolveDefaultPath(String first, String... more) {
+            Path relativePath = Paths.get(first, more);
+            Path repositoryRoot = findRepositoryRoot(relativePath);
+            if (repositoryRoot != null) {
+                return repositoryRoot.resolve(relativePath);
+            }
+            return relativePath;
+        }
+
+        private static Path findRepositoryRoot(Path relativePath) {
+            List<Path> searchRoots = new ArrayList<>();
+            searchRoots.add(Paths.get(System.getProperty("user.dir")));
+
+            Path codeSourcePath = getCodeSourcePath();
+            if (codeSourcePath != null) {
+                searchRoots.add(codeSourcePath);
+            }
+
+            for (Path searchRoot : searchRoots) {
+                Path current = searchRoot.toAbsolutePath().normalize();
+                while (current != null) {
+                    if (Files.exists(current.resolve(relativePath))) {
+                        return current;
+                    }
+                    current = current.getParent();
+                }
+            }
+            return null;
+        }
+
+        private static Path getCodeSourcePath() {
+            try {
+                return Paths.get(GeneticKnapsack.class
+                        .getProtectionDomain()
+                        .getCodeSource()
+                        .getLocation()
+                        .toURI());
+            } catch (Exception ignored) {
+                return null;
+            }
         }
 
         private static Config fromArgs(String[] args) {
