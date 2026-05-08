@@ -26,10 +26,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Random;
 import java.util.regex.Matcher;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Classe principal que contém a lógica do Algoritmo Genético para o Problema da Mochila 0/1.
@@ -43,8 +50,15 @@ public final class GeneticKnapsack {
         // Classe utilitária; não deve ser instanciada.
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         Locale.setDefault(Locale.US);
+
+        if (shouldRunExperimentsFromProperties(args)) {
+            Path propertiesPath = resolvePropertiesPath(args);
+            executeExperimentGrid(propertiesPath);
+            return;
+        }
+
         Config config = Config.fromArgs(args);
 
         executeAllInstances(
@@ -515,6 +529,7 @@ public final class GeneticKnapsack {
                     mutationRate,
                     eliteSize,
                     tournamentSize,
+                    maxWithoutImprovement,
                     seed,
                     elapsedSeconds,
                     result.history
@@ -555,6 +570,318 @@ public final class GeneticKnapsack {
     }
 
     /**
+     * Decide se a execução deve usar o ficheiro de propriedades do AG.
+     *
+     * <p>Sem argumentos, o comportamento fica alinhado com os runners de MMAS/TS:
+     * se existir {@code genetic/src/main/resources/genetic-experiments.properties},
+     * é executada a grelha definida nesse ficheiro. Também é possível indicar
+     * explicitamente o ficheiro com {@code --config caminho.properties} ou passando
+     * diretamente um único argumento terminado em {@code .properties}.</p>
+     */
+    private static boolean shouldRunExperimentsFromProperties(String[] args) {
+        if (args.length == 0) {
+            return Files.exists(defaultPropertiesPath());
+        }
+        if (args.length == 1) {
+            return args[0].endsWith(".properties");
+        }
+        return "--config".equals(args[0]);
+    }
+
+    private static Path resolvePropertiesPath(String[] args) {
+        if (args.length == 0) {
+            return defaultPropertiesPath();
+        }
+        if ("--config".equals(args[0])) {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("Falta o caminho do ficheiro após --config");
+            }
+            return Paths.get(args[1]);
+        }
+        return Paths.get(args[0]);
+    }
+
+    private static Path defaultPropertiesPath() {
+        return Config.resolveDefaultPath("genetic", "src", "main", "resources", "genetic-experiments.properties");
+    }
+
+    /**
+     * Executa a grelha de experiências definida no ficheiro
+     * {@code genetic-experiments.properties}.
+     */
+    private static void executeExperimentGrid(Path propertiesPath) throws IOException, InterruptedException {
+        Properties properties = loadProperties(propertiesPath);
+
+        List<Path> instances = resolveConfiguredInstances(properties);
+        List<Integer> populations = parseIntList(properties, "genetic.population", 50);
+        List<Integer> generationsList = parseIntList(properties, "genetic.generations", 500);
+        List<Double> crossoverRates = parseDoubleList(properties, "genetic.crossover", 0.85);
+        List<Double> mutationRates = parseDoubleList(properties, "genetic.mutation", 0.005);
+        List<Integer> eliteSizes = parseIntList(properties, "genetic.elite", 3);
+        List<Integer> tournamentSizes = parseIntList(properties, "genetic.tournament", 3);
+        List<Integer> stagnationLimits = parseIntList(properties, "genetic.stagnation", 100);
+        List<Long> seeds = parseLongList(properties, "genetic.seed", 42L);
+        int parallelism = Integer.parseInt(properties.getProperty("genetic.parallelism", "1").trim());
+        if (parallelism <= 0) {
+            throw new IllegalArgumentException("genetic.parallelism deve ser > 0");
+        }
+
+        Path outputCsv = Paths.get(properties.getProperty("genetic.output.csv", "results/genetic/ag_resultados.csv").trim());
+        Path outputDir = outputCsv.toAbsolutePath().getParent();
+        if (outputDir == null) {
+            outputDir = Paths.get(".");
+        }
+        Files.createDirectories(outputDir);
+        Path gridPath = outputDir.resolve("ga-grid-results.csv");
+        Path detailedPath = outputDir.resolve("ga-detailed-results.csv");
+        Path mdPath = outputDir.resolve("ga-relatorio.md");
+
+        int totalRuns = instances.size()
+                * populations.size()
+                * generationsList.size()
+                * crossoverRates.size()
+                * mutationRates.size()
+                * eliteSizes.size()
+                * tournamentSizes.size()
+                * stagnationLimits.size()
+                * seeds.size();
+
+        System.out.printf(
+                "Iniciando experiências AG (%d execuções, paralelismo=%d, properties=%s)...%n",
+                totalRuns,
+                parallelism,
+                propertiesPath
+        );
+
+        List<GeneticExperimentTask> tasks = new ArrayList<>(totalRuns);
+        for (Path instancePath : instances) {
+            KnapsackInstance instance = readInstance(instancePath);
+            for (int population : populations) {
+                for (int generations : generationsList) {
+                    for (double crossover : crossoverRates) {
+                        for (double mutation : mutationRates) {
+                            for (int elite : eliteSizes) {
+                                for (int tournament : tournamentSizes) {
+                                    for (int stagnation : stagnationLimits) {
+                                        for (long seed : seeds) {
+                                            tasks.add(new GeneticExperimentTask(
+                                                    instance,
+                                                    population,
+                                                    generations,
+                                                    crossover,
+                                                    mutation,
+                                                    elite,
+                                                    tournament,
+                                                    stagnation,
+                                                    seed
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        List<ResultRow> results = executeExperimentTasks(tasks, parallelism, totalRuns);
+        appendGridCsv(gridPath, results);
+        updateDetailedCsv(detailedPath, results);
+        generateMarkdownReport(mdPath, detailedPath);
+
+        System.out.println("Experiências AG concluídas.");
+        System.out.println("  Grid:      " + gridPath);
+        System.out.println("  Detalhado: " + detailedPath);
+        System.out.println("  Relatório: " + mdPath);
+    }
+
+    private static List<ResultRow> executeExperimentTasks(
+            List<GeneticExperimentTask> tasks,
+            int parallelism,
+            int totalRuns
+    ) throws InterruptedException {
+        List<ResultRow> results = new ArrayList<>(tasks.size());
+        ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+        CompletionService<ResultRow> completion = new ExecutorCompletionService<>(executor);
+        try {
+            for (GeneticExperimentTask task : tasks) {
+                completion.submit(task::execute);
+            }
+
+            for (int completed = 1; completed <= tasks.size(); completed++) {
+                ResultRow row;
+                try {
+                    row = completion.take().get();
+                } catch (ExecutionException e) {
+                    throw new IllegalStateException("Falha ao executar configuração do Algoritmo Genético", e.getCause());
+                }
+                results.add(row);
+
+                System.out.printf(
+                        Locale.US,
+                        "[%d/%d] %s | pop=%d gen=%d cross=%.4f mut=%.4f elite=%d torneio=%d stag=%d seed=%d => valor=%d, %.4f s%n",
+                        completed,
+                        totalRuns,
+                        row.instance,
+                        row.populationSize,
+                        row.maxGenerations,
+                        row.crossoverRate,
+                        row.mutationRate,
+                        row.eliteSize,
+                        row.tournamentSize,
+                        row.maxWithoutImprovement,
+                        row.seed,
+                        row.foundValue,
+                        row.elapsedSeconds
+                );
+            }
+            return results;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private static Properties loadProperties(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException("Ficheiro de propriedades não encontrado: " + path);
+        }
+
+        Properties properties = new Properties();
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            properties.load(reader);
+        }
+        return properties;
+    }
+
+    private static List<Path> resolveConfiguredInstances(Properties properties) throws IOException {
+        List<String> explicitInstances = parseStringList(properties, "genetic.instances");
+        if (!explicitInstances.isEmpty()) {
+            return explicitInstances.stream().map(Paths::get).collect(Collectors.toList());
+        }
+
+        String instancesDir = properties.getProperty("genetic.instances.dir", "").trim();
+        if (instancesDir.isEmpty()) {
+            throw new IllegalArgumentException("Defina genetic.instances ou genetic.instances.dir");
+        }
+
+        Path base = Paths.get(instancesDir);
+        if (!Files.isDirectory(base)) {
+            throw new IllegalArgumentException("Diretoria de instâncias não existe: " + base);
+        }
+
+        try (Stream<Path> paths = Files.list(base)) {
+            List<Path> instances = paths
+                    .filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString(), GeneticKnapsack::naturalCompare))
+                    .collect(Collectors.toList());
+            if (instances.isEmpty()) {
+                throw new IllegalArgumentException("Nenhuma instância encontrada em: " + base);
+            }
+            return instances;
+        }
+    }
+
+    private static List<String> parseStringList(Properties properties, String key) {
+        String value = properties.getProperty(key, "").trim();
+        List<String> parsed = new ArrayList<>();
+        if (value.isEmpty()) {
+            return parsed;
+        }
+        for (String token : value.split(",")) {
+            String cleaned = token.trim();
+            if (!cleaned.isEmpty()) {
+                parsed.add(cleaned);
+            }
+        }
+        return parsed;
+    }
+
+    private static List<Integer> parseIntList(Properties properties, String key, int fallback) {
+        String value = properties.getProperty(key, String.valueOf(fallback)).trim();
+        List<Integer> parsed = new ArrayList<>();
+        for (String token : value.split(",")) {
+            parsed.add(Integer.parseInt(token.trim()));
+        }
+        return parsed;
+    }
+
+    private static List<Long> parseLongList(Properties properties, String key, long fallback) {
+        String value = properties.getProperty(key, String.valueOf(fallback)).trim();
+        List<Long> parsed = new ArrayList<>();
+        for (String token : value.split(",")) {
+            parsed.add(Long.parseLong(token.trim()));
+        }
+        return parsed;
+    }
+
+    private static List<Double> parseDoubleList(Properties properties, String key, double fallback) {
+        String value = properties.getProperty(key, String.valueOf(fallback)).trim();
+        List<Double> parsed = new ArrayList<>();
+        for (String token : value.split(",")) {
+            parsed.add(Double.parseDouble(token.trim()));
+        }
+        return parsed;
+    }
+
+    private record GeneticExperimentTask(
+            KnapsackInstance instance,
+            int populationSize,
+            int generations,
+            double crossoverRate,
+            double mutationRate,
+            int eliteSize,
+            int tournamentSize,
+            int maxWithoutImprovement,
+            long seed
+    ) {
+        private ResultRow execute() {
+            Instant start = Instant.now();
+            GeneticResult result = geneticAlgorithm(
+                    instance,
+                    populationSize,
+                    generations,
+                    crossoverRate,
+                    mutationRate,
+                    eliteSize,
+                    tournamentSize,
+                    maxWithoutImprovement,
+                    seed,
+                    false
+            );
+            double elapsedSeconds = Duration.between(start, Instant.now()).toNanos() / 1_000_000_000.0;
+
+            Long optimal = OPTIMAL_VALUES.get(instance.name);
+            Long difference = optimal == null ? null : optimal - result.value;
+            Double deviation = optimal == null ? null : (difference / (double) optimal) * 100.0;
+
+            return new ResultRow(
+                    instance.name,
+                    instance.n,
+                    instance.capacity,
+                    optimal,
+                    result.initialValue,
+                    result.value,
+                    difference,
+                    deviation,
+                    result.weight,
+                    result.weight <= instance.capacity,
+                    result.stopGeneration,
+                    generations,
+                    populationSize,
+                    crossoverRate,
+                    mutationRate,
+                    eliteSize,
+                    tournamentSize,
+                    maxWithoutImprovement,
+                    seed,
+                    elapsedSeconds,
+                    result.history
+            );
+        }
+    }
+
+    /**
      * Adiciona os resultados da execução atual ao ficheiro da grelha de testes (grid).
      */
     private static void appendGridCsv(Path path, List<ResultRow> results) throws IOException {
@@ -564,7 +891,7 @@ public final class GeneticKnapsack {
         try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8,
                 java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
             if (!exists) {
-                writer.write("instance,population_size,generations,crossover_rate,mutation_rate,elite_size,tournament_size,seed,initial_value,best_value,total_weight,optimal_value,comparison,difference,gap_percent,stop_generation,elapsed_s");
+                writer.write("instance,population_size,generations,crossover_rate,mutation_rate,elite_size,tournament_size,stagnation,seed,initial_value,best_value,total_weight,optimal_value,comparison,difference,gap_percent,stop_generation,elapsed_s");
                 writer.newLine();
             }
             for (ResultRow row : results) {
@@ -582,6 +909,7 @@ public final class GeneticKnapsack {
                         String.format(Locale.US, "%.4f", row.mutationRate),
                         Integer.toString(row.eliteSize),
                         Integer.toString(row.tournamentSize),
+                        Integer.toString(row.maxWithoutImprovement),
                         Long.toString(row.seed),
                         Long.toString(row.initialValue),
                         Long.toString(row.foundValue),
@@ -624,8 +952,8 @@ public final class GeneticKnapsack {
         for (ResultRow row : currentResults) {
             long currentBest = bestValues.getOrDefault(row.instance, -1L);
             if (row.foundValue > currentBest) {
-                String configStr = String.format(Locale.US, "pop=%d gen=%d cRate=%.2f mRate=%.3f elite=%d tourn=%d seed=%d",
-                        row.populationSize, row.maxGenerations, row.crossoverRate, row.mutationRate, row.eliteSize, row.tournamentSize, row.seed);
+                String configStr = String.format(Locale.US, "pop=%d gen=%d cRate=%.2f mRate=%.3f elite=%d tourn=%d stag=%d seed=%d",
+                        row.populationSize, row.maxGenerations, row.crossoverRate, row.mutationRate, row.eliteSize, row.tournamentSize, row.maxWithoutImprovement, row.seed);
 
                 String newLine = String.join(",",
                         row.instance,
@@ -1058,6 +1386,7 @@ public final class GeneticKnapsack {
         private final double mutationRate;
         private final int eliteSize;
         private final int tournamentSize;
+        private final int maxWithoutImprovement;
         private final long seed;
         private final double elapsedSeconds;
         private final List<GenerationRecord> history;
@@ -1080,6 +1409,7 @@ public final class GeneticKnapsack {
                 double mutationRate,
                 int eliteSize,
                 int tournamentSize,
+                int maxWithoutImprovement,
                 long seed,
                 double elapsedSeconds,
                 List<GenerationRecord> history
@@ -1101,6 +1431,7 @@ public final class GeneticKnapsack {
             this.mutationRate = mutationRate;
             this.eliteSize = eliteSize;
             this.tournamentSize = tournamentSize;
+            this.maxWithoutImprovement = maxWithoutImprovement;
             this.seed = seed;
             this.elapsedSeconds = elapsedSeconds;
             this.history = history;
