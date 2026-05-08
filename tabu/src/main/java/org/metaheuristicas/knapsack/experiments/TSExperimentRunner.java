@@ -36,7 +36,7 @@ public final class TSExperimentRunner {
     public static void main(String[] args) throws Exception {
         Path propertiesPath = args.length > 0
                 ? Path.of(args[0])
-                : Path.of("src/main/resources/ts-experiments.properties");
+                : Path.of("tabu/src/main/resources/ts-experiments.properties");
 
         Properties p = carregarProperties(propertiesPath);
 
