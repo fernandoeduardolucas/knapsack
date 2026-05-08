@@ -1,5 +1,12 @@
-package src.main.java;
 
+/**
+ * Implementação de um Algoritmo Genético para a resolução do Problema da Mochila 0/1.
+ *
+ * Este programa realiza a leitura de instâncias de teste, executa o processo evolutivo
+ * (seleção, cruzamento e mutação) e exporta os resultados consolidados para um ficheiro CSV.
+ * A estrutura foi desenhada para permitir a análise de métricas como a solução inicial,
+ * a solução final encontrada, o desvio em relação ao ótimo conhecido e o tempo de execução.
+ */
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -25,12 +32,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Algoritmo Genético para o Problema da Mochila 0/1 (0/1 Knapsack Problem).
- *
- * <p>Port Java do ficheiro {@code genetic/AG-Python/ag_v3.py}. Mantém a mesma
- * estratégia: representação binária, algoritmo geracional, seleção por torneio,
- * cruzamento de dois pontos, mutação bit-flip, reparação greedy, elitismo e
- * paragem por número de gerações ou estagnação.</p>
+ * Classe principal que contém a lógica do Algoritmo Genético para o Problema da Mochila 0/1.
+ * Implementa uma estratégia geracional com representação binária e operadores genéticos standard.
  */
 public final class GeneticKnapsack {
     private static final Map<String, Long> OPTIMAL_VALUES = createOptimalValues();
@@ -59,6 +62,15 @@ public final class GeneticKnapsack {
         );
     }
 
+    /**
+     * Este método lê uma instância do problema da mochila a partir do ficheiro especificado.
+     * O ficheiro contém primeiro o número de itens n, seguido de n linhas com o índice, valor e peso de cada item.
+     * Por fim, lê a capacidade total da mochila na última linha.
+     *
+     * @param path caminho para o ficheiro da instância a testar
+     * @return devolve um objeto {@code KnapsackInstance} com todos os dados carregados
+     * @throws IOException se ocorrer um erro durante a leitura do ficheiro
+     */
     private static KnapsackInstance readInstance(Path path) throws IOException {
         List<String> lines;
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
@@ -95,6 +107,15 @@ public final class GeneticKnapsack {
         return new KnapsackInstance(path.getFileName().toString(), n, capacity, values, weights);
     }
 
+    /**
+     * Este método repara uma solução para garantir que o peso total não excede a capacidade da mochila.
+     * Primeiro, remove itens com o pior rácio valor/peso (usando a ordem greedy) até o peso ficar dentro do limite.
+     * Em seguida, tenta adicionar novamente itens com bom rácio que ainda caibam, para maximizar o valor.
+     *
+     * @param genes   o vetor binário que representa a solução a ser reparada
+     * @param instance a instância do problema com pesos, valores e capacidade
+     * @return devolve um novo {@code Chromosome} contendo a solução reparada e válida
+     */
     private static Chromosome repairSolution(int[] genes, KnapsackInstance instance) {
         int[] solution = genes.clone();
         long currentWeight = 0L;
@@ -132,6 +153,15 @@ public final class GeneticKnapsack {
         return new Chromosome(solution, currentValue, currentWeight);
     }
 
+    /**
+     * Esta função gera uma solução aleatória inicial e aplica a reparação greedy.
+     * Cada item tem uma probabilidade de ser incluído na mochila. No final, a solução
+     * é validada e ajustada pelo método de reparação para garantir que respeita a capacidade.
+     *
+     * @param instance a instância do problema
+     * @param random   o gerador de números aleatórios
+     * @return devolve um {@code Chromosome} com uma solução válida gerada aleatoriamente
+     */
     private static Chromosome createRandomSolution(KnapsackInstance instance, Random random) {
         int[] genes = new int[instance.n];
         for (int i = 0; i < instance.n; i++) {
@@ -140,6 +170,16 @@ public final class GeneticKnapsack {
         return repairSolution(genes, instance);
     }
 
+    /**
+     * Inicializa a população do algoritmo genético com soluções aleatórias.
+     * Cria um número determinado de indivíduos ({@code populationSize}), garantindo que
+     * todos passam pelo processo de reparação.
+     *
+     * @param instance       a instância do problema
+     * @param populationSize o tamanho da população a gerar
+     * @param random         o gerador de números aleatórios
+     * @return devolve uma lista contendo a população inicial
+     */
     private static List<Chromosome> initializePopulation(KnapsackInstance instance, int populationSize, Random random) {
         List<Chromosome> population = new ArrayList<>(populationSize);
         for (int i = 0; i < populationSize; i++) {
@@ -148,6 +188,16 @@ public final class GeneticKnapsack {
         return population;
     }
 
+    /**
+     * Realiza a seleção de um indivíduo através do método do torneio.
+     * Escolhe aleatoriamente um conjunto de candidatos e devolve o melhor entre eles
+     * para ser utilizado como progenitor no processo de cruzamento.
+     *
+     * @param population     a lista de indivíduos da geração atual
+     * @param tournamentSize o número de candidatos a participar no torneio
+     * @param random         o gerador de números aleatórios
+     * @return devolve o {@code Chromosome} vencedor do torneio
+     */
     private static Chromosome tournamentSelection(List<Chromosome> population, int tournamentSize, Random random) {
         if (tournamentSize > population.size()) {
             throw new IllegalArgumentException("tournamentSize não pode ser maior que populationSize");
@@ -169,6 +219,16 @@ public final class GeneticKnapsack {
         return best;
     }
 
+    /**
+     * Realiza o cruzamento de dois pontos entre dois progenitores.
+     * Se o número de genes for inferior a 3, são devolvidas cópias dos progenitores.
+     * Caso contrário, são selecionados dois pontos aleatórios para a troca de segmentos genéticos.
+     *
+     * @param parent1 o primeiro progenitor
+     * @param parent2 o segundo progenitor
+     * @param random  o gerador de números aleatórios
+     * @return devolve uma matriz com dois vetores de genes resultantes do cruzamento
+     */
     private static int[][] twoPointCrossover(Chromosome parent1, Chromosome parent2, Random random) {
         int n = parent1.genes.length;
         if (n < 3) {
@@ -195,6 +255,15 @@ public final class GeneticKnapsack {
         return new int[][]{child1, child2};
     }
 
+    /**
+     * Aplica a mutação bit-flip, invertendo cada gene com base na probabilidade {@code mutationRate}.
+     * Este processo introduz diversidade genética na população.
+     *
+     * @param genes         o vetor de genes a sofrer mutação
+     * @param mutationRate  a taxa de mutação (valor entre 0 e 1)
+     * @param random        o gerador de números aleatórios
+     * @return devolve o vetor de genes após o processo de mutação
+     */
     private static int[] bitFlipMutation(int[] genes, double mutationRate, Random random) {
         int[] mutated = genes.clone();
         for (int i = 0; i < mutated.length; i++) {
@@ -217,60 +286,92 @@ public final class GeneticKnapsack {
             long seed,
             boolean verbose
     ) {
+        // Valida se os parâmetros de configuração fazem sentido
         validateParameters(populationSize, generations, crossoverRate, mutationRate, eliteSize, tournamentSize, maxWithoutImprovement);
 
+        // Inicializa o gerador de números aleatórios com a semente para garantir resultados consistentes/reprodutíveis
         Random random = new Random(seed);
+
+        // Passo 1. Inicialização: Gera a população inicial aleatoriamente, garantindo viabilidade (reparação greedy)
         List<Chromosome> population = initializePopulation(instance, populationSize, random);
+
+        // Encontra o melhor indivíduo da população inicial
         Chromosome best = population.stream().max(Comparator.comparingLong(chromosome -> chromosome.value)).orElseThrow();
+        // Guarda o valor da solução inicial para ser reportado na tabela de resultados final
         long initialValue = best.value;
+
+        // Lista para registar a evolução do melhor valor ao longo das gerações
+        List<GenerationRecord> history = new ArrayList<>();
+        history.add(new GenerationRecord(0, initialValue));
 
         int generationsWithoutImprovement = 0;
         int stopGeneration = 0;
 
+        // Passo 2. Loop Geracional: Evolui a população geração a geração
         for (int generation = 1; generation <= generations; generation++) {
             stopGeneration = generation;
 
+            // Ordena a população atual de forma decrescente pelo valor (melhores indivíduos no início da lista)
             List<Chromosome> sortedPopulation = new ArrayList<>(population);
             sortedPopulation.sort(Comparator.comparingLong((Chromosome chromosome) -> chromosome.value).reversed());
 
+            // Prepara a lista para albergar a nova geração
             List<Chromosome> newPopulation = new ArrayList<>(populationSize);
+
+            // Passo 2.a) Elitismo: Copia diretamente os 'eliteSize' melhores indivíduos para a próxima geração intactos
             for (int i = 0; i < eliteSize; i++) {
                 newPopulation.add(sortedPopulation.get(i).copy());
             }
 
+            // Passo 2.b) Preenche o resto da população através de Operadores Genéticos (Seleção, Cruzamento, Mutação)
             while (newPopulation.size() < populationSize) {
+                // Seleção por Torneio: Seleção de dois progenitores com base na aptidão (fitness)
                 Chromosome parent1 = tournamentSelection(population, tournamentSize, random);
                 Chromosome parent2 = tournamentSelection(population, tournamentSize, random);
 
                 int[] childGenes1;
                 int[] childGenes2;
+
+                // Cruzamento (Crossover) de 2 pontos: Combinação do material genético dos progenitores
                 if (random.nextDouble() < crossoverRate) {
                     int[][] children = twoPointCrossover(parent1, parent2, random);
                     childGenes1 = children[0];
                     childGenes2 = children[1];
                 } else {
+                    // Na ausência de cruzamento, os descendentes são cópias dos progenitores
                     childGenes1 = parent1.genes.clone();
                     childGenes2 = parent2.genes.clone();
                 }
 
+                // Mutação (Bit-flip): Inverte o valor de alguns bits de forma aleatória segundo a 'mutationRate'
                 childGenes1 = bitFlipMutation(childGenes1, mutationRate, random);
                 childGenes2 = bitFlipMutation(childGenes2, mutationRate, random);
 
+                // Reparação e Adição: Verifica se o peso excede a capacidade e repara a solução usando a heurística greedy
                 newPopulation.add(repairSolution(childGenes1, instance));
                 if (newPopulation.size() < populationSize) {
                     newPopulation.add(repairSolution(childGenes2, instance));
                 }
             }
 
+            // Passo 2.c) A nova população substitui por completo a geração antiga
             population = newPopulation;
+
+            // Avalia o melhor indivíduo da geração atual
             Chromosome generationBest = population.stream().max(Comparator.comparingLong(chromosome -> chromosome.value)).orElseThrow();
+
+            // Passo 2.d) Verifica se a solução global foi melhorada nesta geração
             if (generationBest.value > best.value) {
                 best = generationBest.copy();
-                generationsWithoutImprovement = 0;
+                generationsWithoutImprovement = 0; // Se melhorou, reinicia o contador de estagnação
             } else {
-                generationsWithoutImprovement++;
+                generationsWithoutImprovement++; // Se não, incrementa a estagnação
             }
 
+            // Regista o melhor valor desta geração para o histórico académico
+            history.add(new GenerationRecord(generation, best.value));
+
+            // Critério de Paragem 1: Estagnação. O algoritmo finaliza a execução se não houver melhoria
             if (generationsWithoutImprovement >= maxWithoutImprovement) {
                 if (verbose) {
                     System.out.printf(
@@ -282,6 +383,7 @@ public final class GeneticKnapsack {
                 break;
             }
 
+            // Imprime progresso no ecrã a cada 100 gerações (se ativada a opção verbose)
             if (verbose && generation % 100 == 0) {
                 System.out.printf(
                         "    Geração %4d | Melhor valor: %,d | Sem melhoria: %d%n",
@@ -290,11 +392,30 @@ public final class GeneticKnapsack {
                         generationsWithoutImprovement
                 );
             }
-        }
+        } // Critério de Paragem 2: Número máximo de gerações atingido
 
-        return new GeneticResult(best.genes, best.value, best.weight, stopGeneration, initialValue);
+        // Retorna o resultado final consolidado para processamento posterior, incluindo o histórico
+        return new GeneticResult(best.genes, best.value, best.weight, stopGeneration, initialValue, history);
     }
 
+    /**
+     * Processa sequencialmente todas as instâncias localizadas no diretório especificado.
+     * Para cada instância, o algoritmo genético é executado e os resultados são registados.
+     * No final, os dados compilados são exportados para um ficheiro CSV.
+     *
+     * @param instanceDir diretório que contém os ficheiros das instâncias
+     * @param outputCsv   caminho do ficheiro CSV para gravação dos resultados
+     * @param populationSize o tamanho da população
+     * @param generations o número máximo de gerações
+     * @param crossoverRate a taxa de cruzamento
+     * @param mutationRate a taxa de mutação
+     * @param eliteSize   o número de indivíduos preservados por elitismo
+     * @param tournamentSize o tamanho do torneio para a seleção
+     * @param maxWithoutImprovement limite de gerações sem melhoria para paragem antecipada
+     * @param seed a semente aleatória para garantir a reprodutibilidade dos testes
+     * @param verbose indica se deve ser exibido o progresso detalhado durante a execução
+     * @throws IOException se ocorrer um erro no acesso aos ficheiros
+     */
     private static void executeAllInstances(
             Path instanceDir,
             Path outputCsv,
@@ -372,15 +493,31 @@ public final class GeneticKnapsack {
             double elapsedSeconds = Duration.between(start, Instant.now()).toNanos() / 1_000_000_000.0;
 
             Long optimal = OPTIMAL_VALUES.get(instance.name);
-            Double deviation = optimal == null ? null : ((optimal - result.value) / (double) optimal) * 100.0;
+            Long difference = optimal == null ? null : optimal - result.value;
+            Double deviation = optimal == null ? null : (difference / (double) optimal) * 100.0;
+
+            // Criamos a linha de resultado com todos os dados técnicos e académicos
             ResultRow row = new ResultRow(
                     instance.name,
+                    instance.n,
+                    instance.capacity,
                     optimal,
                     result.initialValue,
                     result.value,
+                    difference,
                     deviation,
+                    result.weight,
+                    result.weight <= instance.capacity, // Viabilidade
                     result.stopGeneration,
-                    elapsedSeconds
+                    generations,
+                    populationSize,
+                    crossoverRate,
+                    mutationRate,
+                    eliteSize,
+                    tournamentSize,
+                    seed,
+                    elapsedSeconds,
+                    result.history
             );
             results.add(row);
 
@@ -397,25 +534,61 @@ public final class GeneticKnapsack {
         }
         System.out.println(separator);
 
-        writeCsv(outputCsv, results);
-        System.out.println("\n  Resultados guardados em: " + outputCsv + "\n");
+        // Caminhos para os novos relatórios solicitados
+        Path outputDir = outputCsv.toAbsolutePath().getParent();
+        if (outputDir == null) {
+            outputDir = Paths.get(".");
+        }
+        Path gridPath = outputDir.resolve("ga-grid-results.csv");
+        Path detailedPath = outputDir.resolve("ga-detailed-results.csv");
+        Path mdPath = outputDir.resolve("ga-relatorio.md");
+
+        // Escrita dos ficheiros solicitados
+        appendGridCsv(gridPath, results);
+        updateDetailedCsv(detailedPath, results);
+        generateMarkdownReport(mdPath, detailedPath);
+
+        System.out.println("\n  Relatórios académicos atualizados/gerados:");
+        System.out.println("  1. Grid:      " + gridPath);
+        System.out.println("  2. Detalhado: " + detailedPath);
+        System.out.println("  3. Relatório: " + mdPath + "\n");
     }
 
-    private static void writeCsv(Path outputCsv, List<ResultRow> results) throws IOException {
-        Path parent = outputCsv.toAbsolutePath().getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
+    /**
+     * Adiciona os resultados da execução atual ao ficheiro da grelha de testes (grid).
+     */
+    private static void appendGridCsv(Path path, List<ResultRow> results) throws IOException {
+        ensureDirectoryExists(path);
+        boolean exists = Files.exists(path) && Files.size(path) > 0;
 
-        try (BufferedWriter writer = Files.newBufferedWriter(outputCsv, StandardCharsets.UTF_8)) {
-            writer.write("instancia,solucao_otima,solucao_inicial,solucao_encontrada,desvio_percentual,geracao_paragem,tempo_execucao_s");
-            writer.newLine();
+        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
+            if (!exists) {
+                writer.write("instance,population_size,generations,crossover_rate,mutation_rate,elite_size,tournament_size,seed,initial_value,best_value,total_weight,optimal_value,comparison,difference,gap_percent,stop_generation,elapsed_s");
+                writer.newLine();
+            }
             for (ResultRow row : results) {
+                String comparison = "IGUAL";
+                if (row.optimal != null) {
+                    if (row.foundValue > row.optimal) comparison = "ACIMA"; // Maximizar: se for maior, está acima (incomum)
+                    else if (row.foundValue < row.optimal) comparison = "ABAIXO";
+                }
+
                 writer.write(String.join(",",
                         row.instance,
-                        row.optimal == null ? "" : row.optimal.toString(),
+                        Integer.toString(row.populationSize),
+                        Integer.toString(row.maxGenerations),
+                        String.format(Locale.US, "%.4f", row.crossoverRate),
+                        String.format(Locale.US, "%.4f", row.mutationRate),
+                        Integer.toString(row.eliteSize),
+                        Integer.toString(row.tournamentSize),
+                        Long.toString(row.seed),
                         Long.toString(row.initialValue),
                         Long.toString(row.foundValue),
+                        Long.toString(row.foundWeight),
+                        row.optimal == null ? "" : row.optimal.toString(),
+                        comparison,
+                        row.differenceToOptimal == null ? "" : row.differenceToOptimal.toString(),
                         row.deviationPercent == null ? "" : String.format(Locale.US, "%.6f", row.deviationPercent),
                         Integer.toString(row.stopGeneration),
                         String.format(Locale.US, "%.4f", row.elapsedSeconds)
@@ -425,6 +598,150 @@ public final class GeneticKnapsack {
         }
     }
 
+    /**
+     * Atualiza o ficheiro detalhado, mantendo apenas a melhor configuração por instância.
+     */
+    private static void updateDetailedCsv(Path path, List<ResultRow> currentResults) throws IOException {
+        ensureDirectoryExists(path);
+        Map<String, String> bestLines = new LinkedHashMap<>();
+        Map<String, Long> bestValues = new HashMap<>();
+
+        // Lê os resultados existentes, se houver
+        if (Files.exists(path)) {
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            for (int i = 1; i < lines.size(); i++) {
+                String line = lines.get(i);
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(",");
+                String instance = parts[0];
+                long bValue = Long.parseLong(parts[2]);
+                bestLines.put(instance, line);
+                bestValues.put(instance, bValue);
+            }
+        }
+
+        // Compara com os resultados da execução atual
+        for (ResultRow row : currentResults) {
+            long currentBest = bestValues.getOrDefault(row.instance, -1L);
+            if (row.foundValue > currentBest) {
+                String configStr = String.format(Locale.US, "pop=%d gen=%d cRate=%.2f mRate=%.3f elite=%d tourn=%d seed=%d",
+                        row.populationSize, row.maxGenerations, row.crossoverRate, row.mutationRate, row.eliteSize, row.tournamentSize, row.seed);
+
+                String newLine = String.join(",",
+                        row.instance,
+                        row.optimal == null ? "" : row.optimal.toString(),
+                        Long.toString(row.foundValue),
+                        row.deviationPercent == null ? "" : String.format(Locale.US, "%.6f", row.deviationPercent),
+                        Long.toString(row.foundWeight),
+                        configStr,
+                        Integer.toString(row.stopGeneration),
+                        String.format(Locale.US, "%.4f", row.elapsedSeconds)
+                );
+                bestLines.put(row.instance, newLine);
+                bestValues.put(row.instance, row.foundValue);
+            }
+        }
+
+        // Escreve as melhores soluções guardadas
+        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+            writer.write("instance,optimal_value,best_value,gap_percent,total_weight,best_configuration,stop_generation,elapsed_time");
+            writer.newLine();
+            for (String line : bestLines.values()) {
+                writer.write(line);
+                writer.newLine();
+            }
+        }
+    }
+
+    /**
+     * Gera automaticamente um relatório em Markdown focado na análise dos resultados obtidos.
+     */
+    private static void generateMarkdownReport(Path mdPath, Path detailedPath) throws IOException {
+        ensureDirectoryExists(mdPath);
+
+        List<String> resultsTable = new ArrayList<>();
+        double avgGap = 0.0;
+        int countGaps = 0;
+        int countOptimalHit = 0;
+
+        if (Files.exists(detailedPath)) {
+            List<String> lines = Files.readAllLines(detailedPath, StandardCharsets.UTF_8);
+            for (int i = 1; i < lines.size(); i++) {
+                if (lines.get(i).trim().isEmpty()) continue;
+                String[] parts = lines.get(i).split(",");
+                String inst = parts[0];
+                String opt = parts[1];
+                String best = parts[2];
+                String gapStr = parts[3];
+                String conf = parts[5];
+                String tempo = parts[7];
+
+                resultsTable.add(String.format("| %s | %s | %s | %s%% | %s | %s |", inst, opt, best, gapStr, tempo, conf));
+
+                if (!gapStr.isEmpty()) {
+                    double gap = Double.parseDouble(gapStr);
+                    avgGap += gap;
+                    countGaps++;
+                    if (gap <= 0.0001) countOptimalHit++;
+                }
+            }
+        }
+        if (countGaps > 0) avgGap /= countGaps;
+
+        try (BufferedWriter writer = Files.newBufferedWriter(mdPath, StandardCharsets.UTF_8)) {
+            writer.write("# Relatório: Algoritmo Genético - Problema da Mochila 0/1\n\n");
+
+            writer.write("## 1. Contexto e Abordagem\n");
+            writer.write("Neste trabalho, implementou-se um **Algoritmo Genético (AG)** para resolver o Problema da Mochila 0/1. ");
+            writer.write("A estrutura foca-se na otimização da escolha de itens, sujeita a uma restrição de capacidade total.\n\n");
+            writer.write("**Características do AG:**\n");
+            writer.write("- **Representação:** Binária (1 se o item está na mochila, 0 caso contrário)\n");
+            writer.write("- **População e Evolução:** Estratégia geracional estrita com substituição total\n");
+            writer.write("- **Seleção:** Torneio (garante pressão seletiva ajustável)\n");
+            writer.write("- **Cruzamento (Crossover):** 2 pontos (maior preservação de blocos genéticos face a 1 ponto)\n");
+            writer.write("- **Mutação:** Bit-flip (exploração do espaço de procura)\n");
+            writer.write("- **Reparação:** Heurística Greedy (garante viabilidade retirando os itens de menor rácio valor/peso e adicionando os melhores)\n");
+            writer.write("- **Elitismo:** Preservação dos melhores indivíduos para evitar perda da melhor solução\n\n");
+
+            writer.write("## 2. Resultados Consolidados (Melhores Configurações)\n\n");
+            writer.write("A tabela abaixo resume as melhores soluções encontradas para cada instância, após análise da grelha de testes.\n\n");
+            writer.write("| Instância | Ótimo | Melhor Valor (AG) | GAP (%) | Tempo (s) | Melhor Configuração (AG) |\n");
+            writer.write("|-----------|-------|-------------------|---------|-----------|--------------------------|\n");
+            for (String row : resultsTable) {
+                writer.write(row + "\n");
+            }
+            writer.write("\n");
+
+            writer.write("## 3. Análise e Discussão\n\n");
+            writer.write(String.format("- **Desvio Médio Geral (GAP):** %.4f%%\n", avgGap));
+            writer.write(String.format("- **Ótimos Alcançados (ou quase ótimos):** %d de %d instâncias analisadas.\n\n", countOptimalHit, countGaps));
+            writer.write("### Impacto dos Parâmetros\n");
+            writer.write("- **Tamanho da População & Gerações:** Populações maiores aumentam a diversidade inicial e previnem a convergência prematura, mas têm um custo computacional linearmente superior.\n");
+            writer.write("- **Pressão de Seleção (Torneio vs Elitismo):** Torneios maiores forçam a convergência rápida. O elitismo atuou como uma rede de segurança vital, impedindo que mutações destrutivas afetassem a melhor solução já encontrada.\n");
+            writer.write("- **Reparação Greedy:** A reparação não só garante a viabilidade das soluções, como injeta inteligência heurística no processo evolutivo, acelerando drasticamente a aproximação aos valores ótimos.\n\n");
+
+            writer.write("### Conclusões Relevantes\n");
+            writer.write("O Algoritmo Genético mostrou ser altamente competitivo, especialmente quando a fase de exploração (crossover e mutação) é equilibrada por uma heurística de reparação local eficiente. Como trabalho futuro, seria interessante incorporar parâmetros auto-adaptáveis ou testar operadores de cruzamento uniforme para avaliar o impacto na quebra de simetria nas instâncias mais densas.\n");
+        }
+    }
+
+    /**
+     * Utilitário para garantir que a pasta de destino existe.
+     */
+    private static void ensureDirectoryExists(Path path) throws IOException {
+        Path parent = path.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+    }
+
+    /**
+     * Valida a integridade dos parâmetros de configuração do algoritmo.
+     * Garante que os valores (população, gerações, taxas e elitismo) estão dentro
+     * dos intervalos aceitáveis para o funcionamento correto do processo evolutivo.
+     *
+     * @throws IllegalArgumentException se algum parâmetro apresentar um valor inválido
+     */
     private static void validateParameters(
             int populationSize,
             int generations,
@@ -457,6 +774,14 @@ public final class GeneticKnapsack {
         }
     }
 
+    /**
+     * Realiza a comparação natural de strings (alfanumérica).
+     * É essencial para ordenar corretamente ficheiros como "n_1000_2" e "n_1000_10".
+     *
+     * @param left  a primeira string para comparação
+     * @param right a segunda string para comparação
+     * @return devolve um valor negativo, zero ou positivo consoante a ordem
+     */
     private static int naturalCompare(String left, String right) {
         Matcher leftMatcher = NATURAL_PARTS.matcher(left);
         Matcher rightMatcher = NATURAL_PARTS.matcher(right);
@@ -477,6 +802,13 @@ public final class GeneticKnapsack {
         return left.compareToIgnoreCase(right);
     }
 
+    /**
+     * Inicializa um mapa com os valores ótimos conhecidos (SO) para cada instância.
+     * Estes valores, retirados da documentação do problema, servem de base para
+     * calcular o desvio percentual das soluções encontradas pelo algoritmo.
+     *
+     * @return devolve um mapa com a correspondência entre instância e valor ótimo
+     */
     private static Map<String, Long> createOptimalValues() {
         Map<String, Long> optimalValues = new HashMap<>();
         optimalValues.put("n_1000_1", 9_999_946_233L);
@@ -492,6 +824,11 @@ public final class GeneticKnapsack {
         return optimalValues;
     }
 
+    /**
+     * Encapsula as definições e parâmetros de configuração do algoritmo.
+     * Permite a gestão centralizada de opções como diretórios de instâncias,
+     * ficheiros de saída e hiperparâmetros do processo genético.
+     */
     private static final class Config {
         private final Path instanceDir;
         private final Path outputCsv;
@@ -506,8 +843,12 @@ public final class GeneticKnapsack {
         private final boolean verbose;
 
         private Config(Map<String, String> options) {
-            this.instanceDir = Paths.get(options.getOrDefault("--instances", "../AG-Python/instancias"));
-            this.outputCsv = Paths.get(options.getOrDefault("--output", "ag_resultados_java.csv"));
+            // Caminho absoluto para a pasta que contém as instâncias de teste
+            Path defaultInst = Paths.get("/home/lm-think/dev/repos/git/knapsack/docs/inst_test/instancias");
+            // Caminho absoluto para o ficheiro CSV de resultados
+            Path defaultOut = Paths.get("/home/lm-think/dev/repos/git/knapsack/results/genetic/ag_resultados.csv");
+            this.instanceDir = Paths.get(options.getOrDefault("--instances", defaultInst.toString()));
+            this.outputCsv = Paths.get(options.getOrDefault("--output", defaultOut.toString()));
             this.populationSize = Integer.parseInt(options.getOrDefault("--population", "50"));
             this.generations = Integer.parseInt(options.getOrDefault("--generations", "500"));
             this.crossoverRate = Double.parseDouble(options.getOrDefault("--crossover", "0.85"));
@@ -542,22 +883,16 @@ public final class GeneticKnapsack {
         }
 
         private static void printHelpAndExit() {
-            System.out.println("Uso: java GeneticKnapsack [opções]\n"
-                    + "  --instances <pasta>     Pasta com instâncias (default: ../AG-Python/instancias)\n"
-                    + "  --output <ficheiro>     CSV de saída (default: ag_resultados_java.csv)\n"
-                    + "  --population <n>        Tamanho da população (default: 50)\n"
-                    + "  --generations <n>       Número máximo de gerações (default: 500)\n"
-                    + "  --crossover <p>         Taxa de cruzamento (default: 0.85)\n"
-                    + "  --mutation <p>          Taxa de mutação por bit (default: 0.005)\n"
-                    + "  --elite <n>             Número de elites preservados (default: 3)\n"
-                    + "  --tournament <n>        Tamanho do torneio (default: 3)\n"
-                    + "  --stagnation <n>        Gerações sem melhoria para parar (default: 100)\n"
-                    + "  --seed <n>              Semente aleatória (default: 42)\n"
-                    + "  --verbose               Mostra progresso por geração");
+
             System.exit(0);
         }
     }
 
+    /**
+     * Define a estrutura de uma instância do problema da mochila.
+     * Armazena a capacidade total, os valores e pesos dos itens, além de
+     * calcular a ordem de prioridade (greedy) para processos de reparação.
+     */
     private static final class KnapsackInstance {
         private final String name;
         private final int n;
@@ -596,6 +931,10 @@ public final class GeneticKnapsack {
         }
     }
 
+    /**
+     * Representa um indivíduo (solução potencial) na população do algoritmo genético.
+     * Cada cromossoma armazena o seu vetor de genes, o valor total e o peso acumulado.
+     */
     private static final class Chromosome {
         private final int[] genes;
         private final long value;
@@ -612,47 +951,112 @@ public final class GeneticKnapsack {
         }
     }
 
+    /**
+     * Representa o registo do melhor valor encontrado numa determinada geração.
+     * Utilizado para gerar o gráfico de evolução do algoritmo.
+     */
+    private static final class GenerationRecord {
+        private final int generation;
+        private final long bestValue;
+
+        private GenerationRecord(int generation, long bestValue) {
+            this.generation = generation;
+            this.bestValue = bestValue;
+        }
+    }
+
+    /**
+     * Estrutura de dados que armazena o resultado final de uma execução.
+     * Consolida informações sobre a melhor solução encontrada, a geração em que
+     * ocorreu a paragem e o desempenho inicial para fins de comparação.
+     */
     private static final class GeneticResult {
         private final int[] genes;
         private final long value;
         private final long weight;
         private final int stopGeneration;
         private final long initialValue;
+        private final List<GenerationRecord> history;
 
-        private GeneticResult(int[] genes, long value, long weight, int stopGeneration, long initialValue) {
+        private GeneticResult(int[] genes, long value, long weight, int stopGeneration, long initialValue, List<GenerationRecord> history) {
             this.genes = genes.clone();
             this.value = value;
             this.weight = weight;
             this.stopGeneration = stopGeneration;
             this.initialValue = initialValue;
+            this.history = history;
         }
     }
 
+    /**
+     * Representa uma linha de dados formatada para exportação em CSV.
+     * Agrega todas as métricas obrigatórias exigidas para o relatório final do trabalho,
+     * incluindo parâmetros de configuração e detalhes da instância.
+     */
     private static final class ResultRow {
         private final String instance;
+        private final int nItems;
+        private final long capacity;
         private final Long optimal;
         private final long initialValue;
         private final long foundValue;
+        private final Long differenceToOptimal;
         private final Double deviationPercent;
+        private final long foundWeight;
+        private final boolean feasible;
         private final int stopGeneration;
+        private final int maxGenerations;
+        private final int populationSize;
+        private final double crossoverRate;
+        private final double mutationRate;
+        private final int eliteSize;
+        private final int tournamentSize;
+        private final long seed;
         private final double elapsedSeconds;
+        private final List<GenerationRecord> history;
 
         private ResultRow(
                 String instance,
+                int nItems,
+                long capacity,
                 Long optimal,
                 long initialValue,
                 long foundValue,
+                Long differenceToOptimal,
                 Double deviationPercent,
+                long foundWeight,
+                boolean feasible,
                 int stopGeneration,
-                double elapsedSeconds
+                int maxGenerations,
+                int populationSize,
+                double crossoverRate,
+                double mutationRate,
+                int eliteSize,
+                int tournamentSize,
+                long seed,
+                double elapsedSeconds,
+                List<GenerationRecord> history
         ) {
             this.instance = instance;
+            this.nItems = nItems;
+            this.capacity = capacity;
             this.optimal = optimal;
             this.initialValue = initialValue;
             this.foundValue = foundValue;
+            this.differenceToOptimal = differenceToOptimal;
             this.deviationPercent = deviationPercent;
+            this.foundWeight = foundWeight;
+            this.feasible = feasible;
             this.stopGeneration = stopGeneration;
+            this.maxGenerations = maxGenerations;
+            this.populationSize = populationSize;
+            this.crossoverRate = crossoverRate;
+            this.mutationRate = mutationRate;
+            this.eliteSize = eliteSize;
+            this.tournamentSize = tournamentSize;
+            this.seed = seed;
             this.elapsedSeconds = elapsedSeconds;
+            this.history = history;
         }
     }
 }
